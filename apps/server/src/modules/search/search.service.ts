@@ -1,0 +1,54 @@
+import { env } from '../../config/env.js';
+import { logger } from '../../lib/logger.js';
+
+export type WebSearchResult = {
+  title: string;
+  url: string;
+  snippet: string;
+};
+
+export async function webSearch(
+  query: string,
+  limit = 5,
+  signal?: AbortSignal,
+): Promise<WebSearchResult[]> {
+  const url = new URL('/search', env.SEARXNG_URL);
+  url.searchParams.set('q', query);
+  url.searchParams.set('format', 'json');
+
+  try {
+    const res = await fetch(url, { signal });
+    if (!res.ok) {
+      logger.warn({ status: res.status }, 'searxng returned non-ok status');
+      return [];
+    }
+    const data = (await res.json()) as {
+      results?: Array<{ title?: string; url?: string; content?: string }>;
+    };
+    return (data.results ?? [])
+      .filter((r) => r.url && (r.content || r.title))
+      .slice(0, limit)
+      .map((r) => ({
+        title: r.title ?? r.url!,
+        url: r.url!,
+        snippet: (r.content ?? '').trim(),
+      }));
+  } catch (err) {
+    logger.warn(
+      { err: (err as Error).message },
+      'web search failed, continuing without context',
+    );
+    return [];
+  }
+}
+
+export function formatSearchContext(results: WebSearchResult[]): string {
+  if (results.length === 0) return '';
+  const lines = results.map(
+    (r, i) => `[${i + 1}] ${r.title}\n${r.snippet}\nSource: ${r.url}`,
+  );
+  return [
+    'The following web search results may help answer the user. Cite sources when relevant.',
+    ...lines,
+  ].join('\n\n');
+}
