@@ -7,6 +7,7 @@ import { healthRouter } from './modules/health/health.routes.js';
 import { chatRouter } from './modules/chat/chat.routes.js';
 import { ollamaRouter } from './modules/ollama/ollama.routes.js';
 import { authRouter } from './modules/auth/auth.routes.js';
+import { searchRouter } from './modules/search/search.routes.js';
 
 export function createApp() {
   const app = express();
@@ -43,6 +44,7 @@ export function createApp() {
   app.use('/api/v1/health', healthRouter);
   app.use('/api/v1/ollama', ollamaRouter);
   app.use('/api/v1/auth', authRouter);
+  app.use('/api/v1', searchRouter);
   app.use('/api/v1', chatRouter);
 
   // Global error handler — must be last

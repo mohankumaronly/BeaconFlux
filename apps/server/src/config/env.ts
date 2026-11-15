@@ -11,6 +11,7 @@ const EnvSchema = z.object({
   NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
   API_TOKEN: z.string().min(1, 'API_TOKEN must not be empty'),
   API_TOKEN_FORCE_DISPLAY: z.enum(['true', 'false']).default('false'),
+  SEARXNG_URL: z.string().url().default('http://searxng:8080'),
   // Comma-separated hostname patterns the backend is allowed to call.
   // Wildcards: *.trycloudflare.com matches any subdomain.
   OLLAMA_ALLOWED_HOSTS: z

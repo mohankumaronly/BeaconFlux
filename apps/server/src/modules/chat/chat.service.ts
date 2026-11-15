@@ -1,6 +1,7 @@
 import type { ServerStreamEvent } from '@local-ollama/shared';
 import * as repo from './chat.repo.js';
 import { streamOllamaChat, type OllamaChatMessage } from '../ollama/ollama.client.js';
+import { webSearch, formatSearchContext } from '../search/search.service.js';
 
 /** @deprecated use ServerStreamEvent from @local-ollama/shared */
 export type ChatStreamEvent = ServerStreamEvent;
@@ -40,10 +41,22 @@ export async function* streamChat(
 
   // 3. Build prompt from full history
   const history = await repo.listMessages(chatId);
-  const ollamaMessages: OllamaChatMessage[] = history.map((m) => ({
-    role: m.role,
-    content: m.content,
-  }));
+
+  // Web-augmented context: search only for the current user message.
+  // Fail-soft: if search returns nothing, ollamaMessages stays unchanged.
+  const searchResults = await webSearch(params.userMessage, 5, params.signal);
+  const searchContext = formatSearchContext(searchResults);
+
+  const ollamaMessages: OllamaChatMessage[] = history.map((m, idx) => {
+    const isLast = idx === history.length - 1 && m.role === 'user';
+    if (isLast && searchContext) {
+      return {
+        role: m.role,
+        content: `${searchContext}\n\n---\n\nUser question: ${m.content}`,
+      };
+    }
+    return { role: m.role, content: m.content };
+  });
 
   // 4. Stream from Ollama, accumulate text
   let assistantText = '';
