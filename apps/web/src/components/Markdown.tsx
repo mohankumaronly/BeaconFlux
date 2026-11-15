@@ -43,7 +43,7 @@ function SafeImage({ src, alt, sources }: { src?: string; alt?: string; sources:
         src={finalSrc} 
         alt={alt || "Rendered image"}
         onError={handleError}
-        className="max-w-full max-h-[400px] h-auto rounded-xl border border-gray-200 dark:border-gray-700 shadow-md object-contain bg-gray-50 dark:bg-gray-900" 
+        className="max-w-full max-h-100 h-auto rounded-xl border border-gray-200 dark:border-gray-700 shadow-md object-contain bg-gray-50 dark:bg-gray-900" 
         loading="lazy"
       />
       {alt && alt !== "Rendered image" && (
