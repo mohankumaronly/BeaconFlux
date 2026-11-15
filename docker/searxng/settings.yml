@@ -5,10 +5,12 @@ use_default_settings: true
 server:
   secret_key: "5f58b001a6bad89775c6eb0ff62055f2043ad821ece3f668e954cc1d4601a964"
   limiter: false
-  image_proxy: false
+  image_proxy: true
 
 search:
   safe_search: 0
   formats:
     - html
     - json
+  autocomplete: ""
+  default_lang: "en"

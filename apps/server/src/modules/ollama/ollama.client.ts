@@ -1,12 +1,14 @@
 import { env } from '../../config/env.js';
 
 export type OllamaChatMessage = {
-  role: 'system' | 'user' | 'assistant';
+  role: 'system' | 'user' | 'assistant' | 'tool';
   content: string;
+  tool_calls?: any[]; // Added for agent loop
 };
 
 export type OllamaStreamChunk =
   | { type: 'token'; text: string }
+  | { type: 'tool_calls'; toolCalls: any[] }
   | { type: 'done' };
 
 /**
@@ -42,10 +44,6 @@ export function isAllowedOllamaUrl(raw: string): boolean {
   });
 }
 
-/**
- * Translates a user-entered URL to the URL the Docker container can actually reach.
- * If the frontend sends http://localhost:11434, Docker must use host.docker.internal.
- */
 /**
  * Translates a user-entered URL to the URL the Docker container can actually reach.
  * If the frontend sends http://localhost:11434, Docker must use host.docker.internal.
@@ -105,13 +103,19 @@ export async function* streamOllamaChat(
   messages: OllamaChatMessage[],
   model: string,
   signal?: AbortSignal,
+  tools?: any[], // Added tools parameter
 ): AsyncGenerator<OllamaStreamChunk> {
   const targetUrl = translateUrlForDocker(baseUrl);
   
+  const payload: any = { model, messages, stream: true };
+  if (tools && tools.length > 0) {
+    payload.tools = tools;
+  }
+
   const res = await fetch(`${targetUrl}/api/chat`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ model, messages, stream: true }),
+    body: JSON.stringify(payload),
     signal,
   });
 
@@ -144,11 +148,18 @@ export async function* streamOllamaChat(
       }
 
       const o = obj as Record<string, unknown>;
+      const msg = o['message'] as Record<string, unknown> | undefined;
+      
+      // Yield tool calls if present
+      if (msg?.['tool_calls']) {
+        yield { type: 'tool_calls', toolCalls: msg['tool_calls'] as any[] };
+      }
+
       if (o['done']) {
         yield { type: 'done' };
         return;
       }
-      const msg = o['message'] as Record<string, unknown> | undefined;
+
       const text = msg?.['content'];
       if (typeof text === 'string' && text.length > 0) {
         yield { type: 'token', text };
@@ -162,6 +173,11 @@ export async function* streamOllamaChat(
     try {
       const obj = JSON.parse(tail) as Record<string, unknown>;
       const msg = obj['message'] as Record<string, unknown> | undefined;
+      
+      if (msg?.['tool_calls']) {
+        yield { type: 'tool_calls', toolCalls: msg['tool_calls'] as any[] };
+      }
+
       const text = msg?.['content'];
       if (typeof text === 'string' && text.length > 0) {
         yield { type: 'token', text };

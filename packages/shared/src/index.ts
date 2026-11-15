@@ -1,13 +1,9 @@
-// ============================================================
-// API Contract Types — shared by backend and frontend
-// ============================================================
-
 export type ChatRole = 'system' | 'user' | 'assistant';
 
 export type ChatSummary = {
   id: number;
   title: string;
-  createdAt: string; // ISO string, JSON-serialized
+  createdAt: string;
   updatedAt: string;
 };
 
@@ -24,39 +20,31 @@ export type MessagesResponse = {
   messages: ChatMessage[];
 };
 
-// ============================================================
-// SSE Stream Events — what /api/v1/chat emits
-// ============================================================
+export type WebSource = {
+  title: string;
+  url: string;
+  snippet: string;
+  publishedDate?: string | null;
+  thumbnail?: string;
+};
 
 export type ServerStreamEvent =
   | { type: 'chat_created'; chatId: number }
   | { type: 'token'; text: string }
+  | { type: 'sources'; sources: WebSource[] }
   | { type: 'done'; chatId: number; assistantMessageId: number }
   | { type: 'error'; message: string };
-
-// ============================================================
-// Request Bodies
-// ============================================================
 
 export type ChatRequestBody = {
   chatId?: number;
   message: string;
   model: string;
-  /** Optional Ollama base URL. When omitted the backend falls back to env.OLLAMA_URL. */
   ollamaUrl?: string;
 };
-
-// ============================================================
-// Ollama Test Endpoint
-// ============================================================
 
 export type OllamaTestResponse =
   | { ok: true; models: string[] }
   | { ok: false; error: string };
-
-// ============================================================
-// Health
-// ============================================================
 
 export type HealthResponse = {
   ok: boolean;

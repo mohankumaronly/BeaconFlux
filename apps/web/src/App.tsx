@@ -8,7 +8,8 @@ import { Composer } from './components/Composer';
 import { ThemeToggle } from './components/ThemeToggle';
 import { SettingsModal } from './components/SettingsModal';
 import { FirstRunModal } from './components/FirstRunModal';
-import { Settings, Check, AlertCircle } from 'lucide-react';
+import { SourcesPanel } from './components/SourcesPanel';
+import { Settings, Check, AlertCircle, Search } from 'lucide-react';
 import {
   listChats,
   hasApiToken,
@@ -40,16 +41,10 @@ const App = () => {
   const [selectedModel, setSelectedModel] = useState(DEFAULT_MODEL);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [chats, setChats] = useState<ChatSummary[]>([]);
-  // First-run modal: blocking on first visit if no token in localStorage
   const [firstRunOpen, setFirstRunOpen] = useState(() => !hasApiToken());
-  // Amber banner: shown if firstRun modal was cancelled and token is still missing
   const [showTokenBanner, setShowTokenBanner] = useState(false);
-  // Toast notifications
   const [toast, setToast] = useState<ToastState | null>(null);
 
-  // Derive the effective model. If the current selection isn't available,
-  // prefer a plain completion model (e.g. llama3.2) over "thinking" models
-  // (qwen3.x) whose reasoning tokens can leave content empty for a long time.
   const fallbackModel = (() => {
     if (models.length === 0) return selectedModel;
     const preferred = models.find((m) => /^llama/i.test(m.name));
@@ -68,10 +63,12 @@ const App = () => {
     ]);
   }, []);
 
-  const { messages, chatId, isStreaming, progress, error, send, stop, clear, loadChat } =
-    useChat({ model, ollamaUrl: baseUrl, onChatCreated: handleChatCreated });
+  const { 
+    messages, chatId, isStreaming, progress, error, send, stop, clear, loadChat, currentSources 
+  } = useChat({ model, ollamaUrl: baseUrl, onChatCreated: handleChatCreated });
 
-  // Load saved chats on mount.
+  const [showSources, setShowSources] = useState(true);
+
   useEffect(() => {
     if (hasApiToken()) {
       listChats()
@@ -80,7 +77,6 @@ const App = () => {
     }
   }, []);
 
-  // Background probe: if a token is stored, verify it against backend
   useEffect(() => {
     const stored = getStoredToken();
     if (stored) {
@@ -95,7 +91,6 @@ const App = () => {
     }
   }, []);
 
-  // Toast timer auto-dismiss
   useEffect(() => {
     if (!toast) return;
     const timer = setTimeout(() => setToast(null), 5000);
@@ -174,6 +169,21 @@ const App = () => {
             </button>
           </div>
           <div className="flex items-center gap-2">
+            {/* SOURCES TOGGLE BUTTON */}
+            {currentSources.length > 0 && (
+              <button
+                type="button"
+                onClick={() => setShowSources(!showSources)}
+                className={`hidden items-center gap-1 rounded-full px-3 py-1 text-xs font-medium transition-colors sm:flex ${
+                  showSources 
+                    ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300' 
+                    : 'bg-gray-100 text-gray-500 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-400'
+                }`}
+              >
+                <Search size={14} />
+                Sources
+              </button>
+            )}
             {loadingModels && (
               <span className="hidden text-xs text-gray-400 sm:inline">
                 loading models…
@@ -192,7 +202,6 @@ const App = () => {
           </div>
         </header>
 
-        {/* No-token banner — shown when first-run modal was cancelled and token is still missing */}
         {showTokenBanner && !hasApiToken() && (
           <div className="flex items-center justify-between gap-3 border-b border-amber-300 bg-amber-50 px-4 py-2 text-sm text-amber-900 dark:border-amber-700 dark:bg-amber-950/60 dark:text-amber-100">
             <span>
@@ -244,12 +253,22 @@ const App = () => {
           </div>
         )}
 
-        <ChatWindow
-          messages={messages}
-          isStreaming={isStreaming}
-          progress={progress}
-          onPickSuggestion={handleSuggestion}
-        />
+        {/* WRAP CHAT AND SOURCES IN A FLEX ROW */}
+        <div className="flex flex-1 min-h-0">
+          <ChatWindow
+            messages={messages}
+            isStreaming={isStreaming}
+            progress={progress}
+            onPickSuggestion={handleSuggestion}
+          />
+          {showSources && currentSources.length > 0 && (
+            <SourcesPanel 
+              sources={currentSources} 
+              onClose={() => setShowSources(false)} 
+            />
+          )}
+        </div>
+
         <Composer onSend={send} onStop={stop} isStreaming={isStreaming} />
       </main>
 

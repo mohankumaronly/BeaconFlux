@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import type { WebSource } from '@local-ollama/shared';
 import type { Message, MessageStats } from '../types';
 import { streamChatApi, getMessages } from '../lib/api';
 
@@ -9,7 +10,6 @@ function uid(): string {
   return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
 }
 
-/** Rough token estimate when exact counts are unavailable. */
 function estimateTokens(text: string): number {
   return Math.max(1, Math.round(text.length / 4));
 }
@@ -29,16 +29,14 @@ export interface UseChatResult {
   send: (text: string) => Promise<void>;
   stop: () => void;
   clear: () => void;
-  /** Load an existing conversation from the backend. */
   loadChat: (id: number) => Promise<void>;
+  currentSources: WebSource[];
 }
 
 export interface UseChatOptions {
   model: string;
   systemPrompt?: string;
-  /** Optional Ollama base URL forwarded to the backend (allowlist-enforced). */
   ollamaUrl?: string;
-  /** Fired when the backend creates a brand-new chat on first send. */
   onChatCreated?: (chat: { id: number; title: string }) => void;
 }
 
@@ -51,10 +49,9 @@ export function useChat(options: UseChatOptions): UseChatResult {
   const [isStreaming, setIsStreaming] = useState(false);
   const [progress, setProgress] = useState<StreamProgress | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [currentSources, setCurrentSources] = useState<WebSource[]>([]);
   const abortRef = useRef<AbortController | null>(null);
 
-  // Keep the latest chatId/model accessible inside the send callback without
-  // re-creating it (avoids stale closures during streaming).
   const chatIdRef = useRef<number | undefined>(undefined);
   useEffect(() => {
     chatIdRef.current = chatId;
@@ -72,6 +69,7 @@ export function useChat(options: UseChatOptions): UseChatResult {
     setError(null);
     setProgress(null);
     setIsStreaming(false);
+    setCurrentSources([]); // <-- CLEAR
   }, []);
 
   const loadChat = useCallback(async (id: number) => {
@@ -80,6 +78,7 @@ export function useChat(options: UseChatOptions): UseChatResult {
     setError(null);
     setProgress(null);
     setIsStreaming(false);
+    setCurrentSources([]); // <-- CLEAR
     try {
       const { messages: rows } = await getMessages(id);
       setChatId(id);
@@ -102,10 +101,11 @@ export function useChat(options: UseChatOptions): UseChatResult {
     async (text: string) => {
       const trimmed = text.trim();
       if (!trimmed) return;
-      if (abortRef.current) return; // already streaming
+      if (abortRef.current) return;
 
       setError(null);
       setProgress(null);
+      setCurrentSources([]); // <-- CLEAR ON SEND
 
       const userMsg: Message = {
         id: uid(),
@@ -158,10 +158,12 @@ export function useChat(options: UseChatOptions): UseChatResult {
               const tokensPerSecond = elapsedMs > 0 ? tokenCount / (elapsedMs / 1000) : 0;
               setProgress({ tokens: tokenCount, elapsedMs, tokensPerSecond });
             }
+          } else if (ev.type === 'sources') {
+            // 👇 CAPTURE SOURCES HERE
+            setCurrentSources(ev.sources);
           } else if (ev.type === 'error') {
             setError(ev.message);
           } else if (ev.type === 'done') {
-            // Backend doesn't return Ollama timing; synthesize stats from wall clock.
             const completionTokens = tokenCount || estimateTokens(full);
             const elapsedMs = firstTokenAt ? performance.now() - firstTokenAt : 0;
             const stats: MessageStats = {
@@ -186,7 +188,6 @@ export function useChat(options: UseChatOptions): UseChatResult {
         if ((err as Error).name !== 'AbortError') {
           setError((err as Error).message || 'Unknown error');
         }
-        // Keep partial content on abort; drop only a completely empty placeholder.
         setMessages((prev) =>
           prev.filter((m) => !(m.id === assistantId && m.content === '')),
         );
@@ -199,5 +200,5 @@ export function useChat(options: UseChatOptions): UseChatResult {
     [model, ollamaUrl, onChatCreated],
   );
 
-  return { messages, chatId, isStreaming, progress, error, send, stop, clear, loadChat };
+  return { messages, chatId, isStreaming, progress, error, send, stop, clear, loadChat, currentSources };
 }

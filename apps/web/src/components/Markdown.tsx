@@ -23,6 +23,14 @@ export function Markdown({ content }: { content: string }) {
         remarkPlugins={[remarkGfm]}
         rehypePlugins={[[rehypeHighlight, { detect: true, ignoreMissing: true }]]}
         components={{
+          img: ({ node, ...props }) => (
+            <img 
+              {...props} 
+              className="max-w-full max-h-[300px] h-auto rounded-xl my-3 border border-gray-200 dark:border-gray-700 shadow-sm object-contain bg-gray-50 dark:bg-gray-900" 
+              loading="lazy"
+              alt={props.alt || "Rendered image"}
+            />
+          ),
           code({ className, children, ...props }) {
             const isBlock = /language-/.test(className ?? '');
             if (!isBlock) {

@@ -5,6 +5,8 @@ export type WebSearchResult = {
   title: string;
   url: string;
   snippet: string;
+  publishedDate?: string | null;
+  thumbnail?: string;
 };
 
 export async function webSearch(
@@ -28,7 +30,14 @@ export async function webSearch(
       return [];
     }
     const data = (await res.json()) as {
-      results?: Array<{ title?: string; url?: string; content?: string }>;
+      results?: Array<{
+        title?: string;
+        url?: string;
+        content?: string;
+        publishedDate?: string | null;
+        thumbnail?: string;
+        img_src?: string;
+      }>;
     };
     logger.debug(
       { query, count: data.results?.length ?? 0 },
@@ -41,6 +50,8 @@ export async function webSearch(
         title: r.title ?? r.url!,
         url: r.url!,
         snippet: (r.content ?? '').trim(),
+        publishedDate: r.publishedDate ?? null,
+        thumbnail: r.thumbnail || r.img_src || undefined,
       }));
   } catch (err) {
     logger.warn(
