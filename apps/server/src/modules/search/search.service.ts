@@ -12,12 +12,17 @@ export async function webSearch(
   limit = 5,
   signal?: AbortSignal,
 ): Promise<WebSearchResult[]> {
+  const timeoutSignal = AbortSignal.timeout(5000);
+  const effectiveSignal = signal
+    ? AbortSignal.any([signal, timeoutSignal])
+    : timeoutSignal;
+
   const url = new URL('/search', env.SEARXNG_URL);
   url.searchParams.set('q', query);
   url.searchParams.set('format', 'json');
 
   try {
-    const res = await fetch(url, { signal });
+    const res = await fetch(url, { signal: effectiveSignal });
     if (!res.ok) {
       logger.warn({ status: res.status }, 'searxng returned non-ok status');
       return [];
@@ -25,6 +30,10 @@ export async function webSearch(
     const data = (await res.json()) as {
       results?: Array<{ title?: string; url?: string; content?: string }>;
     };
+    logger.debug(
+      { query, count: data.results?.length ?? 0 },
+      'web search completed',
+    );
     return (data.results ?? [])
       .filter((r) => r.url && (r.content || r.title))
       .slice(0, limit)
