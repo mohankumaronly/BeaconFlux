@@ -51,6 +51,7 @@ export async function webSearch(
         url: r.url!,
         snippet: (r.content ?? '').trim(),
         publishedDate: r.publishedDate ?? null,
+        // Map SearXNG's img_src to our thumbnail field
         thumbnail: r.thumbnail || r.img_src || undefined,
       }));
   } catch (err) {
@@ -64,11 +65,21 @@ export async function webSearch(
 
 export function formatSearchContext(results: WebSearchResult[]): string {
   if (results.length === 0) return '';
-  const lines = results.map(
-    (r, i) => `[${i + 1}] ${r.title}\n${r.snippet}\nSource: ${r.url}`,
-  );
+
+  const lines = results.map((r, i) => {
+    const date = r.publishedDate ? ` (${r.publishedDate})` : '';
+    
+    // 👇 FIX: Only use r.thumbnail, which is already defined in the type
+    const imageStr = r.thumbnail ? `\nImage URL: ${r.thumbnail}` : '';
+
+    return `[${i + 1}] ${r.title}${date}\n${r.snippet}${imageStr}\nSource: ${r.url}`;
+  });
+
   return [
-    'The following web search results may help answer the user. Cite sources when relevant.',
+    'The following web search results may help answer the user.',
+    'IMPORTANT: If the user asks for images, or if an Image URL is provided, you MUST display the image directly in your response using this exact syntax:',
+    '![Image Description](The_Exact_Image_URL_Here)',
+    'Do NOT provide bare links and do NOT tell the user to visit a website. Embed the image using the Markdown syntax above. If no Image URL is provided, do not attempt to create one.',
     ...lines,
   ].join('\n\n');
 }

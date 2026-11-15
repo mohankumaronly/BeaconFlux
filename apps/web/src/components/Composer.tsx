@@ -13,7 +13,6 @@ export function Composer({
   const [value, setValue] = useState('');
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-  // Auto-resize textarea up to a max height (ChatGPT does this)
   useEffect(() => {
     const el = textareaRef.current;
     if (!el) return;
@@ -25,7 +24,6 @@ export function Composer({
     if (!value.trim() || isStreaming) return;
     onSend(value);
     setValue('');
-    // Reset height after clearing
     if (textareaRef.current) textareaRef.current.style.height = 'auto';
   };
 
@@ -39,7 +37,7 @@ export function Composer({
   const canSend = value.trim().length > 0 && !isStreaming;
 
   return (
-    <div className="mx-auto w-full max-w-3xl px-4 pb-4 pt-2">
+    <div className="w-full max-w-3xl mx-auto px-4 pb-2">
       <div className="relative rounded-[28px] border border-gray-200 bg-white shadow-[0_2px_12px_rgba(0,0,0,0.06)] transition-colors focus-within:border-gray-300 dark:border-gray-700 dark:bg-gray-900 dark:shadow-[0_2px_12px_rgba(0,0,0,0.4)] dark:focus-within:border-gray-600">
         <div className="flex items-end gap-2 px-3 py-2.5">
           <textarea

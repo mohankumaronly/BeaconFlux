@@ -1,10 +1,11 @@
 import { useState } from 'react';
 import { Bot, User, Copy, Check } from 'lucide-react';
 import type { Message } from '../types';
+import type { WebSource } from '@local-ollama/shared';
 import { Markdown } from './Markdown';
 import { MessageStatsBar } from './MessageStatsBar';
 
-export function MessageBubble({ message }: { message: Message }) {
+export function MessageBubble({ message, sources = [] }: { message: Message; sources?: WebSource[] }) {
   const [copied, setCopied] = useState(false);
   const isUser = message.role === 'user';
 
@@ -48,7 +49,6 @@ export function MessageBubble({ message }: { message: Message }) {
   // ─── ASSISTANT: full-width, no bubble (ChatGPT style) ────────
   return (
     <div className="group flex gap-3">
-      {/* Avatar: white/black circle with border — like ChatGPT's logo badge */}
       <div
         className="
           mt-0.5 grid h-8 w-8 shrink-0 place-items-center rounded-full
@@ -60,10 +60,10 @@ export function MessageBubble({ message }: { message: Message }) {
       </div>
 
       <div className="min-w-0 flex-1 pt-0.5 text-sm leading-relaxed">
-        <Markdown content={message.content || '…'} />
+        {/* PASS SOURCES HERE */}
+        <Markdown content={message.content || '…'} sources={sources} />
         {message.stats && <MessageStatsBar stats={message.stats} />}
 
-        {/* Action row — copy response (hover-revealed on desktop) */}
         <div
           className="
             mt-1.5 flex items-center gap-1

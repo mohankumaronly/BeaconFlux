@@ -2,8 +2,80 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import rehypeHighlight from 'rehype-highlight';
 import { CodeBlock } from './CodeBlock';
+import type { WebSource } from '@local-ollama/shared';
+import { ImageOff } from 'lucide-react';
+import { useState, useEffect } from 'react';
 
-export function Markdown({ content }: { content: string }) {
+function SafeImage({ src, alt, sources }: { src?: string; alt?: string; sources: WebSource[] }) {
+  const [error, setError] = useState(false);
+  const [finalSrc, setFinalSrc] = useState(src);
+
+  // If the URL changes (streaming updates), reset the error state
+  useEffect(() => {
+    setFinalSrc(src);
+    setError(false);
+  }, [src]);
+
+  const handleError = () => {
+    // If it fails, find a fallback thumbnail from the sources
+    const fallback = sources.find(s => s.thumbnail)?.thumbnail;
+    if (fallback && fallback !== finalSrc) {
+      // Try the fallback URL instead
+      setFinalSrc(fallback);
+    } else {
+      // If no fallback exists, show the error UI
+      setError(true);
+    }
+  };
+
+  if (!finalSrc || error) {
+    return (
+      <span className="flex items-center justify-center p-4 my-4 bg-gray-100 dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 text-gray-500 text-sm">
+        <ImageOff className="mr-2" size={18} />
+        Image unavailable ({alt || 'No description'})
+      </span>
+    );
+  }
+
+  return (
+    <span className="flex flex-col items-center my-4 w-full">
+      <img 
+        src={finalSrc} 
+        alt={alt || "Rendered image"}
+        onError={handleError}
+        className="max-w-full max-h-[400px] h-auto rounded-xl border border-gray-200 dark:border-gray-700 shadow-md object-contain bg-gray-50 dark:bg-gray-900" 
+        loading="lazy"
+      />
+      {alt && alt !== "Rendered image" && (
+        <span className="text-xs text-gray-500 mt-2 italic">{alt}</span>
+      )}
+    </span>
+  );
+}
+
+export function Markdown({ content, sources = [] }: { content: string; sources?: WebSource[] }) {
+  // Intercept empty `![alt]()` tags before ReactMarkdown processes them
+  const fixEmptyImages = (text: string) => {
+    return text.replace(/!\[([^\]]*)\]\(\s*\)/g, (match, altText) => {
+      // Find matching source by title
+      const source = sources.find(s => 
+        s.title.toLowerCase().includes(altText.toLowerCase().trim()) || 
+        altText.toLowerCase().trim().includes(s.title.toLowerCase())
+      );
+      if (source && source.thumbnail) {
+        return `![${altText}](${source.thumbnail})`;
+      }
+      // If no direct match, just inject the first available thumbnail
+      const fallbackSource = sources.find(s => s.thumbnail);
+      if (fallbackSource) {
+        return `![${altText}](${fallbackSource.thumbnail})`;
+      }
+      return match;
+    });
+  };
+
+  const processedContent = fixEmptyImages(content);
+
   return (
     <div className="
       prose prose-base max-w-none wrap-break-word dark:prose-invert
@@ -24,21 +96,14 @@ export function Markdown({ content }: { content: string }) {
         rehypePlugins={[[rehypeHighlight, { detect: true, ignoreMissing: true }]]}
         components={{
           img: ({ node, ...props }) => (
-            <img 
-              {...props} 
-              className="max-w-full max-h-[300px] h-auto rounded-xl my-3 border border-gray-200 dark:border-gray-700 shadow-sm object-contain bg-gray-50 dark:bg-gray-900" 
-              loading="lazy"
-              alt={props.alt || "Rendered image"}
-            />
+            // Use the SafeImage component here
+            <SafeImage src={props.src} alt={props.alt} sources={sources} />
           ),
           code({ className, children, ...props }) {
             const isBlock = /language-/.test(className ?? '');
             if (!isBlock) {
               return (
-                <code
-                  className="rounded bg-gray-200 px-1.5 py-0.5 text-[0.85em] font-mono dark:bg-gray-700"
-                  {...props}
-                >
+                <code className="rounded bg-gray-200 px-1.5 py-0.5 text-[0.85em] font-mono dark:bg-gray-700" {...props}>
                   {children}
                 </code>
               );
@@ -47,19 +112,14 @@ export function Markdown({ content }: { content: string }) {
           },
           a({ href, children }) {
             return (
-              <a
-                href={href}
-                target="_blank"
-                rel="noreferrer noopener"
-                className="text-blue-600 underline underline-offset-2 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300"
-              >
+              <a href={href} target="_blank" rel="noreferrer noopener" className="text-blue-600 underline underline-offset-2 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300">
                 {children}
               </a>
             );
           },
         }}
       >
-        {content}
+        {processedContent}
       </ReactMarkdown>
     </div>
   );

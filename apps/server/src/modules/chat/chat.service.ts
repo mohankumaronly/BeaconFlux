@@ -20,8 +20,8 @@ export async function* streamChat(
 
   // 1. Ensure chat exists
   if (chatId == null) {
-    const title = params.userMessage.length > 60 
-      ? params.userMessage.slice(0, 57) + '...' 
+    const title = params.userMessage.length > 60
+      ? params.userMessage.slice(0, 57) + '...'
       : params.userMessage;
     const chat = await repo.createChat(title || 'New chat');
     chatId = chat.id;
@@ -40,13 +40,29 @@ export async function* streamChat(
   // 3. Build history and System Prompt
   const history = await repo.listMessages(chatId);
   const today = new Date().toISOString().split('T')[0];
-  
+
   const systemPrompt: OllamaChatMessage = {
     role: 'system',
-    content: `You are a helpful assistant. Today's date is ${today}.
-You have access to a web search tool. You MUST use the tool if the user asks about current events, live data, prices, versions, or facts that may have changed recently.
-If the user asks a follow-up question (like "in india" or "check again"), look at the chat history to understand the context.
-Do NOT guess or use training data for real-time information; use the web_search tool instead.`
+    content: `You are a helpful search assistant. Today's date is {{CURRENT_DATE}}.
+
+You have been provided with search results. You MUST follow these rules strictly:
+
+### 1. GROUNDING
+- Base your answer primarily on the provided search results.
+- Do NOT add facts, numbers, or statistics that are not present in the search results.
+- If the search results do not fully answer the question, say so explicitly.
+
+### 2. CITATIONS (CRITICAL)
+- You MUST cite search results directly after the sentence they are used in.
+- Use the following format: "The sky is blue[1]."
+- Do NOT leave a space between the last word and the citation bracket.
+- Only cite the most relevant search results. Cite at most three per sentence.
+- Do NOT include a separate "References" or "Sources" section at the end.
+
+### 3. FORMATTING
+- If the user asks for images or wallpapers, and an "Image URL:" is present in the search results, you MUST render the image using Markdown: ![Description](Image_URL).
+- NEVER copy and paste entire web pages or README files. Summarize the information into 2-3 paragraphs.
+- If the user asks a follow-up question, use the chat history to understand the context.`
   };
 
   const ollamaMessages: OllamaChatMessage[] = [
@@ -59,14 +75,14 @@ Do NOT guess or use training data for real-time information; use the web_search 
     type: 'function',
     function: {
       name: 'web_search',
-      description: 'Search the web for current information. Use this for news, current versions, sports scores, or facts you do not know.',
+      description: 'Search the web for current information. Use this for news, current versions, sports scores, or images.',
       parameters: {
         type: 'object',
         required: ['query'],
         properties: {
-          query: { 
-            type: 'string', 
-            description: 'The search query to look up. Be specific and include context from the chat history if needed.' 
+          query: {
+            type: 'string',
+            description: 'The search query to look up. Be specific and include context from the chat history if needed.'
           }
         }
       }
@@ -85,7 +101,7 @@ Do NOT guess or use training data for real-time information; use the web_search 
       loopCount++;
       let hasToolCall = false;
       let currentAssistantMessage: OllamaChatMessage = { role: 'assistant', content: '', tool_calls: [] };
-      
+
       for await (const chunk of streamOllamaChat(
         params.baseUrl,
         ollamaMessages,
@@ -109,27 +125,36 @@ Do NOT guess or use training data for real-time information; use the web_search 
 
       // Process Tool Call
       ollamaMessages.push(currentAssistantMessage);
-      
+
       const toolCall = currentAssistantMessage.tool_calls![0];
-      const searchQuery = toolCall.function.arguments.query;
-      
+      const searchQuery = toolCall.function.arguments?.query;
+
+      // 👇 GUARD: Block empty or undefined queries
+      if (!searchQuery || typeof searchQuery !== 'string' || searchQuery.trim() === '' || searchQuery === 'undefined') {
+        ollamaMessages.push({
+          role: 'tool',
+          content: 'Search failed: No valid query provided. Please answer the user using your existing knowledge.',
+        });
+        break; // Break the loop and force the model to answer
+      }
+
       yield { type: 'token', text: `\n\n*(Searching the web for: "${searchQuery}"...)*\n\n` };
 
       // Execute search
       const searchResults = await webSearch(searchQuery, 5, params.signal);
       const searchContext = formatSearchContext(searchResults);
 
-      // 👇 YIELD FULL SOURCES INCLUDING THUMBNAILS
+      // Yield full sources including thumbnails for the side panel
       if (searchResults.length > 0) {
-        yield { 
-          type: 'sources', 
-          sources: searchResults.map(r => ({ 
-            title: r.title, 
-            url: r.url, 
+        yield {
+          type: 'sources',
+          sources: searchResults.map(r => ({
+            title: r.title,
+            url: r.url,
             snippet: r.snippet,
             publishedDate: r.publishedDate,
             thumbnail: r.thumbnail || '',
-          })) 
+          }))
         };
       }
 
@@ -137,9 +162,9 @@ Do NOT guess or use training data for real-time information; use the web_search 
         role: 'tool',
         content: searchContext || 'No results found.',
       });
-      
+
       // Disable tool for next pass so it writes the final answer
-      currentTools = []; 
+      currentTools = [];
     }
 
     const saved = await repo.appendMessage(chatId, 'assistant', assistantText);
