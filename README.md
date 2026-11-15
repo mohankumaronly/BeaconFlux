@@ -183,6 +183,7 @@ All production settings are optional; defaults work out of the box without any `
 | `POSTGRES_USER` | `docker/.env` | `ollama` | PostgreSQL database username. | Optional |
 | `POSTGRES_PASSWORD` | `docker/.env` | `ollama_secret` | PostgreSQL database password. | Optional |
 | `POSTGRES_DB` | `docker/.env` | `ollama_chat` | PostgreSQL database name. | Optional |
+| `SEARXNG_URL` | `docker/.env`, `apps/server/.env` | `http://searxng:8080` | SearXNG backend URL for web search context injection. | Optional |
 | `MIGRATIONS_FOLDER` | container / env | `./drizzle` | Directory path containing Drizzle SQL migration files. | Optional (internal default) |
 | `MIGRATIONS_RETRY_MAX` | container / env | `30` | Maximum connection retry attempts before migration fails. | Optional (internal default) |
 
@@ -341,6 +342,36 @@ The `server` container reaches host Ollama via `host.docker.internal:11434` (con
 
 ---
 
+## Web Search (Optional)
+
+Web search augmentation enriches Ollama responses with current web information via [SearXNG](https://github.com/searxng/searxng).
+
+### How it works
+- **Context injection (not a vector DB)**: On each chat message, the backend issues a search query to SearXNG, retrieves up to 5 relevant snippets, formats them as citation context, and injects them only into the prompt for the latest user turn.
+- **Fail-soft**: If SearXNG is unreachable, times out, or returns no results, the request continues without context and Ollama answers normally without user-facing errors.
+- **Database hygiene**: Raw user messages are persisted in PostgreSQL without the injected context, ensuring your chat history stays clean.
+
+### Latency and Token Overhead
+- **Latency**: Web search adds approximately 500ms to 1500ms of latency per message before token generation begins (capped by a 5-second backend timeout).
+- **Context window**: Search results consume an additional ~300 to 800 tokens of the LLM context window per turn.
+
+### Using an External SearXNG Instance
+If you already run a SearXNG instance or prefer an external one, set `SEARXNG_URL` in `docker/.env`:
+```env
+SEARXNG_URL=https://searx.yourdomain.com
+```
+
+### Privacy Notice
+When web search is enabled, the text of your chat query is sent by the server container to the configured SearXNG service to fetch search results from web search engines.
+
+### How to Disable Web Search
+To completely disable web search and remove the SearXNG container:
+1. In `docker/compose.yaml`, remove the `searxng` service block and the `searxng:` dependency from `server.depends_on`.
+2. Remove or comment out `SEARXNG_URL` in `docker/compose.yaml` and `docker/.env`.
+3. Re-run `docker compose up -d`.
+
+---
+
 ## Security
 
 | Layer | Mechanism |
@@ -372,6 +403,7 @@ apps/
         chat/       chat controller + service + routes
         health/     health check route
         ollama/     ollama client + SSRF allowlist + test route
+        search/     search service + debug route
     entrypoint.sh   Container boot script: migrate → run
     Dockerfile      Multi-stage: build → node:22-alpine runtime
   web/              React + Vite + Tailwind CSS
@@ -383,8 +415,9 @@ apps/
 packages/
   shared/           TypeScript types shared across server and web
 docker/
-  compose.yaml      db + server + web services + named volumes
+  compose.yaml      db + server + web + searxng services + named volumes
   nginx.conf        static frontend serve + /api/* reverse proxy (SSE streaming)
+  searxng/          SearXNG settings.yml configuration
   .env              Optional deployment overrides (git-ignored)
   .env.example      Template with documentation for all compose variables
 ```
