@@ -40,6 +40,7 @@ services:
       MIGRATIONS_AUTO: ${MIGRATIONS_AUTO:-true}
       PUBLIC_URL: ${PUBLIC_URL:-http://localhost:8080}
       API_TOKEN_FORCE_DISPLAY: ${API_TOKEN_FORCE_DISPLAY:-false}
+      SEARXNG_URL: ${SEARXNG_URL:-http://searxng:8080}
     volumes:
       - api_token:/app/data
     ports:
@@ -49,6 +50,8 @@ services:
     depends_on:
       db:
         condition: service_healthy
+      searxng:
+        condition: service_started
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3000/api/v1/health || exit 1"]
       interval: 10s
@@ -67,6 +70,13 @@ services:
     depends_on:
       server:
         condition: service_healthy
+
+  searxng:
+    image: searxng/searxng:latest
+    container_name: local-ollama-searxng
+    restart: unless-stopped
+    volumes:
+      - ./searxng/settings.yml:/etc/searxng/settings.yml:ro
 
 volumes:
   pgdata:
