@@ -1,3 +1,5 @@
+// Single responsibility: Validate and export environment configuration.
+
 import { z } from 'zod';
 import { resolveApiToken } from '../lib/token.js';
 
@@ -12,7 +14,7 @@ const EnvSchema = z.object({
   API_TOKEN: z.string().min(1, 'API_TOKEN must not be empty'),
   API_TOKEN_FORCE_DISPLAY: z.enum(['true', 'false']).default('false'),
   SEARXNG_URL: z.string().url().default('http://searxng:8080'),
-  // Comma-separated hostname patterns the backend is allowed to call.
+  // Comma-separated hostname patterns the backend is allowed to call for Ollama.
   // Wildcards: *.trycloudflare.com matches any subdomain.
   OLLAMA_ALLOWED_HOSTS: z
     .string()
@@ -23,6 +25,17 @@ const EnvSchema = z.object({
         .map((s) => s.trim().toLowerCase())
         .filter(Boolean),
     ),
+  // Comma-separated hostname patterns the backend is allowed to call for custom/OpenAI providers.
+  PROVIDER_ALLOWED_HOSTS: z
+    .string()
+    .default('*.trycloudflare.com,localhost,127.0.0.1,host.docker.internal')
+    .transform((v) =>
+      v
+        .split(',')
+        .map((s) => s.trim().toLowerCase())
+        .filter(Boolean),
+    ),
+  ENCRYPTION_KEY: z.string().optional(),
 });
 
 const parsed = EnvSchema.safeParse({
