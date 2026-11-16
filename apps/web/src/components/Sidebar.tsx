@@ -8,6 +8,8 @@ import {
 import type { OllamaModel } from '../types';
 import type { ConnectionStatus } from '../hooks/useConnection';
 import type { ChatSummary } from '../lib/api';
+import type { ProviderPublic } from '../types/providers';
+import { ModelPicker } from './ModelPicker';
 
 function StatusDot({ status }: { status: ConnectionStatus }) {
   const color =
@@ -64,10 +66,12 @@ export function Sidebar({
   chats,
   activeChatId,
   onSelectChat,
+  providers = [],
+  currentProviderId,
 }: {
   models: OllamaModel[];
   model: string;
-  onModelChange: (name: string) => void;
+  onModelChange: (providerId: string, model: string) => void;
   onNewChat: () => void;
   baseUrl: string;
   status: ConnectionStatus;
@@ -77,6 +81,8 @@ export function Sidebar({
   chats: ChatSummary[];
   activeChatId?: number;
   onSelectChat: (id: number) => void;
+  providers?: ProviderPublic[];
+  currentProviderId?: string;
 }) {
   const grouped = groupChats(chats);
 
@@ -119,28 +125,13 @@ export function Sidebar({
 
       {/* Model selector */}
       <div className="mt-4 px-3">
-        <label className="mb-1.5 block px-1 text-[11px] font-medium uppercase tracking-wide text-gray-500 dark:text-gray-400">
-          Model
-        </label>
-        <select
-          value={model}
-          onChange={(e) => onModelChange(e.target.value)}
-          disabled={models.length === 0}
-          className="
-            w-full rounded-lg border border-gray-200 bg-white px-3 py-2
-            text-sm text-gray-800 outline-none transition-colors
-            focus:border-gray-900 disabled:opacity-60
-            dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100
-            dark:focus:border-gray-400
-          "
-        >
-          {models.length === 0 && <option value={model}>— no models —</option>}
-          {models.map((m) => (
-            <option key={m.name} value={m.name}>
-              {m.name}
-            </option>
-          ))}
-        </select>
+        <ModelPicker
+          providers={providers}
+          currentProviderId={currentProviderId}
+          currentModel={model}
+          ollamaModels={models}
+          onSelect={onModelChange}
+        />
       </div>
 
       {/* Chat history — ChatGPT style */}
