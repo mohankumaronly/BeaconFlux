@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "tsx watch --env-file=.env src/index.ts",
     "build": "tsc -p tsconfig.json",
+    "test": "tsx --env-file=.env --test \"src/__tests__/**/*.test.ts\"",
     "start": "node --env-file=.env dist/index.js",
     "db:generate": "node --env-file=.env ../../node_modules/drizzle-kit/bin.cjs generate",
     "db:migrate": "node --env-file=.env ../../node_modules/drizzle-kit/bin.cjs migrate",
