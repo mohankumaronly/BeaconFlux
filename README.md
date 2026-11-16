@@ -7,7 +7,7 @@ A persisted chat application using Ollama for local LLM inference, Express for t
 Open your terminal and run these three commands. No `.env` files, no manual token creation, and no manual database migrations are required.
 
 ```powershell
-git clone https://github.com/mohankumaronly/Local-ollama-chat-interface.git
+git clone https://github.com/mohankumaronly/BeaconFlux.git
 cd Local-ollama-chat-interface/docker
 docker compose up -d
 
