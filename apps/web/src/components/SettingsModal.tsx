@@ -8,12 +8,14 @@ import { ProvidersTab } from './ProvidersTab';
 type Tab = 'connection' | 'providers';
 
 export interface SettingsModalProps extends ConnectionTabProps {
-  open: boolean;
+  open?: boolean;
+  isOpen?: boolean;
 }
 
 export function SettingsModal(props: SettingsModalProps) {
   const [tab, setTab] = useState<Tab>('connection');
-  if (!props.open) return null;
+  const isOpen = props.open ?? props.isOpen;
+  if (!isOpen) return null;
 
   return (
     <div

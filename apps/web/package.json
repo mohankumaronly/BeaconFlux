@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
+    "test": "tsx --import ./src/__tests__/register.mjs --test \"src/__tests__/**/*.test.ts\"",
     "lint": "oxlint",
     "preview": "vite preview"
   },

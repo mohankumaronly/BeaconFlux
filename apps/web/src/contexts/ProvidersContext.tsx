@@ -20,7 +20,7 @@ interface Ctx {
   refresh: () => Promise<void>;
 }
 
-const ProvidersContext = createContext<Ctx | undefined>(undefined);
+export const ProvidersContext = createContext<Ctx | undefined>(undefined);
 const LAST_PROVIDER_KEY = 'lastProviderId';
 
 export function ProvidersProvider({ children }: { children: ReactNode }) {

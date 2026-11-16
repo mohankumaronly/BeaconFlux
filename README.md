@@ -397,6 +397,21 @@ docker/
 
 ---
 
+## Providers UI (Phase 2)
+
+Beacon Flux supports both native local Ollama and any OpenAI-compatible cloud provider (Groq, Together AI, OpenRouter, DeepSeek, Mistral, LM Studio, vLLM).
+
+### Key Features
+- **Tabbed Settings Modal**: Seamlessly toggle between Ollama **Connection** settings and **Providers** management.
+- **Provider Management**: Add, edit, delete, and test custom OpenAI-compatible providers with quick presets.
+- **Encrypted Keys**: Provider API keys are encrypted at rest using AES-256-GCM and masked in the UI — secrets are never exposed in plaintext in the DOM.
+- **Two-Level Model Picker**: The sidebar model selector provides a two-level picker (`Provider ▸ Model`) when cloud providers are configured, auto-selecting default models on provider change.
+- **SSRF Hardening**: Custom provider base URLs are validated to prevent private IP and metadata service access.
+- **Graceful Fallback (G16)**: If connected to a pre-2.1 backend where `/api/v1/providers` is unavailable, the UI gracefully falls back to single-dropdown Ollama mode without disruption.
+- **Architecture Stability (D7)**: `apps/web/src/lib/ollama.ts` remains completely untouched; `apps/web/src/lib/providers.ts` is purely additive, ensuring existing Ollama logic and connection health checks remain 100% stable.
+
+---
+
 ## Rebuilding after source changes
 
 ```powershell
