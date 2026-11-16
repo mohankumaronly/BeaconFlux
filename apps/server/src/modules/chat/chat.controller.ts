@@ -3,7 +3,8 @@ import { z } from 'zod';
 import { streamChat } from './chat.service.js';
 import * as repo from './chat.repo.js';
 import { env } from '../../config/env.js';
-import { isAllowedOllamaUrl, ensureModelAvailable } from '../ollama/ollama.client.js';
+import { isAllowedOllamaUrl } from '../ollama/ollama.client.js';
+import { getProviderById, makeOllamaProvider } from '../../providers/registry.js';
 
 const ChatBody = z.object({
   chatId: z.number().int().positive().optional(),
@@ -11,6 +12,7 @@ const ChatBody = z.object({
   model: z.string().min(1).default('llama3.2'),
   // Optional: client-supplied Ollama target. Omit to use env.OLLAMA_URL.
   ollamaUrl: z.string().url().optional(),
+  providerId: z.string().uuid().optional(),
 });
 
 export async function postChat(req: Request, res: Response): Promise<void> {
@@ -20,11 +22,17 @@ export async function postChat(req: Request, res: Response): Promise<void> {
     return;
   }
 
-  const { chatId, message, model, ollamaUrl } = parsed.data;
+  const { chatId, message, model, ollamaUrl, providerId } = parsed.data;
 
-  // Resolve target: validated client override or env default (backward-compat)
-  let baseUrl = env.OLLAMA_URL;
-  if (ollamaUrl) {
+  // Resolve target: providerId -> client ollamaUrl override -> env default
+  let provider;
+  if (providerId) {
+    provider = await getProviderById(providerId);
+    if (!provider) {
+      res.status(404).json({ error: 'Provider not found' });
+      return;
+    }
+  } else if (ollamaUrl) {
     if (!isAllowedOllamaUrl(ollamaUrl)) {
       res.status(400).json({
         error: 'URL not allowed',
@@ -32,12 +40,14 @@ export async function postChat(req: Request, res: Response): Promise<void> {
       });
       return;
     }
-    baseUrl = ollamaUrl.replace(/\/+$/, ''); // strip trailing slashes
+    provider = makeOllamaProvider(ollamaUrl.replace(/\/+$/, ''));
+  } else {
+    provider = makeOllamaProvider(env.OLLAMA_URL);
   }
 
   // Fail fast before opening SSE if model isn't on the target
   try {
-    await ensureModelAvailable(baseUrl, model);
+    await provider.ensureModel(model);
   } catch (err) {
     res.status(400).json({
       error: 'Model unavailable',
@@ -68,7 +78,7 @@ export async function postChat(req: Request, res: Response): Promise<void> {
       chatId,
       userMessage: message,
       model,
-      baseUrl,
+      provider,
       signal: abort.signal,
     })) {
       send(ev);

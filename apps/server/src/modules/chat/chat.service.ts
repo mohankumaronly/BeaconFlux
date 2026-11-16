@@ -1,6 +1,7 @@
 import type { ServerStreamEvent } from '@local-ollama/shared';
 import * as repo from './chat.repo.js';
-import { streamOllamaChat, type OllamaChatMessage } from '../ollama/ollama.client.js';
+import type { OllamaChatMessage } from '../ollama/ollama.client.js';
+import type { Provider } from '../../providers/base.provider.js';
 import { webSearch, formatSearchContext, fetchUrlContent } from '../search/search.service.js';
 
 export type ChatStreamEvent = ServerStreamEvent;
@@ -9,7 +10,7 @@ export type StreamChatParams = {
   chatId?: number;
   userMessage: string;
   model: string;
-  baseUrl: string;
+  provider: Provider;
   signal?: AbortSignal;
 };
 
@@ -115,13 +116,12 @@ export async function* streamChat(
       let hasToolCall = false;
       let currentAssistantMessage: OllamaChatMessage = { role: 'assistant', content: '', tool_calls: [] };
 
-      for await (const chunk of streamOllamaChat(
-        params.baseUrl,
-        ollamaMessages,
-        params.model,
-        params.signal,
-        currentTools
-      )) {
+      for await (const chunk of params.provider.chatStream({
+        model: params.model,
+        messages: ollamaMessages,
+        tools: currentTools,
+        signal: params.signal,
+      })) {
         if (chunk.type === 'token') {
           if (!hasToolCall) {
             assistantText += chunk.text;
@@ -198,6 +198,7 @@ export async function* streamChat(
         ollamaMessages.push({
           role: 'tool',
           content: (searchContext || 'No results found.') + combinedPageContext,
+          tool_call_id: toolCall.id,
         });
       } 
       
@@ -208,6 +209,7 @@ export async function* streamChat(
           ollamaMessages.push({
             role: 'tool',
             content: 'Fetch failed: No valid URL provided.',
+            tool_call_id: toolCall.id,
           });
           break;
         }
@@ -219,6 +221,7 @@ export async function* streamChat(
         ollamaMessages.push({
           role: 'tool',
           content: pageContent || 'Could not extract text from that page.',
+          tool_call_id: toolCall.id,
         });
       }
 
