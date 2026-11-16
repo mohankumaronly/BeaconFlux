@@ -2,33 +2,6 @@
 
 A persisted chat application using Ollama for local LLM inference, Express for the backend API, PostgreSQL for persistence, and React for the frontend. Works against local Ollama **or** a remote Ollama exposed through a Cloudflare Tunnel.
 
----
-
-## Prerequisites (Native Ollama)
-
-This app does **not** run Ollama inside Docker. It connects to the Ollama instance already running on your host machine. This preserves your existing models (no re-downloading) and ensures full GPU acceleration.
-
-By default, Ollama on Windows only listens to `127.0.0.1`, which blocks Docker containers from reaching it. You must set two environment variables **once**:
-
-1. Press the **Windows Key**, type **"Edit the system environment variables"**, and open it.
-2. Click **Environment Variables...** at the bottom.
-3. Under **User variables**, click **New**:
-   - Variable name: `OLLAMA_HOST`
-   - Variable value: `0.0.0.0`
-4. Click **New** again:
-   - Variable name: `OLLAMA_ORIGINS`
-   - Variable value: `*`
-5. Click **OK** on all windows.
-6. **Restart Ollama:** Right-click the Ollama icon in your system tray and click **Quit**. Then re-open the Ollama app.
-
-*(On Linux or macOS, add `export OLLAMA_HOST="0.0.0.0"` and `export OLLAMA_ORIGINS="*"` to your shell profile).*
-
-Ensure Ollama is running and you have at least one model:
-```powershell
-ollama serve
-ollama pull llama3.2
-```
-
 ## Quick Start (production — the recommended path)
 
 Open your terminal and run these three commands. No `.env` files, no manual token creation, and no manual database migrations are required.
