@@ -37,11 +37,12 @@ export interface UseChatOptions {
   model: string;
   systemPrompt?: string;
   ollamaUrl?: string;
+  providerId?: string;
   onChatCreated?: (chat: { id: number; title: string }) => void;
 }
 
 export function useChat(options: UseChatOptions): UseChatResult {
-  const { model, onChatCreated } = options;
+  const { model, onChatCreated, providerId } = options;
   const ollamaUrl = options.ollamaUrl;
 
   const [messages, setMessages] = useState<Message[]>([]);
@@ -135,7 +136,7 @@ export function useChat(options: UseChatOptions): UseChatResult {
 
       try {
         for await (const ev of streamChatApi(
-          { chatId: activeChatId, message: trimmed, model, ollamaUrl },
+          { chatId: activeChatId, message: trimmed, model, ollamaUrl, providerId },
           controller.signal,
         )) {
           if (ev.type === 'chat_created') {
@@ -197,7 +198,7 @@ export function useChat(options: UseChatOptions): UseChatResult {
         abortRef.current = null;
       }
     },
-    [model, ollamaUrl, onChatCreated],
+    [model, ollamaUrl, providerId, onChatCreated],
   );
 
   return { messages, chatId, isStreaming, progress, error, send, stop, clear, loadChat, currentSources };

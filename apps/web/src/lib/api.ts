@@ -128,7 +128,7 @@ export async function getMessages(chatId: number): Promise<MessagesResponse> {
  * The caller iterates; abort via the passed AbortSignal.
  */
 export async function* streamChatApi(
-  params: { chatId?: number; message: string; model: string; ollamaUrl?: string },
+  params: { chatId?: number; message: string; model: string; ollamaUrl?: string; providerId?: string },
   signal?: AbortSignal,
 ): AsyncGenerator<ServerStreamEvent> {
   const res = await fetch('/api/v1/chat', {

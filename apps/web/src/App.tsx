@@ -9,6 +9,8 @@ import { ThemeToggle } from './components/ThemeToggle';
 import { SettingsModal } from './components/SettingsModal';
 import { FirstRunModal } from './components/FirstRunModal';
 import { SourcesPanel } from './components/SourcesPanel';
+import { ProviderBadge } from './components/ProviderBadge';
+import { useProviderSelection } from './hooks/useProviders';
 import { Settings, Check, AlertCircle, Search } from 'lucide-react';
 import {
   listChats,
@@ -37,12 +39,17 @@ const App = () => {
     reset,
   } = useConnection();
 
+  const { currentId: providerId, current: currentProvider, setCurrentId, providers } = useProviderSelection();
   const [selectedModel, setSelectedModel] = useState(DEFAULT_MODEL);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [chats, setChats] = useState<ChatSummary[]>([]);
   const [firstRunOpen, setFirstRunOpen] = useState(() => !hasApiToken());
   const [showTokenBanner, setShowTokenBanner] = useState(false);
   const [toast, setToast] = useState<ToastState | null>(null);
+
+  useEffect(() => {
+    if (currentProvider?.defaultModel) setSelectedModel(currentProvider.defaultModel);
+  }, [currentProvider?.id, currentProvider?.defaultModel]);
 
   const fallbackModel = (() => {
     if (models.length === 0) return selectedModel;
@@ -64,7 +71,7 @@ const App = () => {
 
   const {
     messages, chatId, isStreaming, progress, error, send, stop, clear, loadChat, currentSources
-  } = useChat({ model, ollamaUrl: baseUrl, onChatCreated: handleChatCreated });
+  } = useChat({ model, ollamaUrl: baseUrl, providerId, onChatCreated: handleChatCreated });
 
   const [showSources, setShowSources] = useState(true);
 
@@ -128,7 +135,12 @@ const App = () => {
       <Sidebar
         models={models}
         model={model}
-        onModelChange={setSelectedModel}
+        onModelChange={(pId, m) => {
+          setCurrentId(pId || undefined);
+          setSelectedModel(m);
+        }}
+        providers={providers}
+        currentProviderId={providerId}
         onNewChat={clear}
         baseUrl={baseUrl}
         status={status}
@@ -144,9 +156,13 @@ const App = () => {
         <header className="flex items-center justify-between border-b border-gray-200 px-4 py-3 dark:border-gray-800 sm:px-6 shrink-0">
           <div className="flex min-w-0 items-center gap-2">
             <h1 className="truncate text-sm font-semibold">Beacon Flux Chat</h1>
-            <span className="hidden truncate rounded-full bg-gray-100 px-2 py-0.5 text-xs text-gray-500 dark:bg-gray-800 dark:text-gray-400 sm:inline">
-              {model}
-            </span>
+            {currentProvider ? (
+              <ProviderBadge provider={currentProvider} model={model} />
+            ) : (
+              <span className="hidden truncate rounded-full bg-gray-100 px-2 py-0.5 text-xs text-gray-500 dark:bg-gray-800 dark:text-gray-400 sm:inline">
+                {model}
+              </span>
+            )}
             <button
               type="button"
               onClick={() => setSettingsOpen(true)}
