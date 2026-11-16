@@ -52,7 +52,7 @@ export function clearStoredToken(): void {
  * Any extra headers passed in are merged; they can override Authorization
  * (e.g. Content-Type).
  */
-function authHeaders(extra: Record<string, string> = {}): Record<string, string> {
+export function authHeaders(extra: Record<string, string> = {}): Record<string, string> {
   const token = getApiToken();
   const headers: Record<string, string> = { ...extra };
   if (token) headers['Authorization'] = `Bearer ${token}`;
