@@ -40,7 +40,28 @@ export type ChatRequestBody = {
   message: string;
   model: string;
   ollamaUrl?: string;
+  providerId?: string;
 };
+
+export type ChatRequest = ChatRequestBody;
+
+export interface ProviderPreset {
+  label: string;
+  baseUrl: string;
+  type: 'ollama' | 'openai' | 'custom';
+}
+
+export interface ProviderPublic {
+  id: string;
+  type: 'ollama' | 'openai' | 'custom';
+  label: string;
+  baseUrl: string;
+  hasKey: boolean;
+  defaultModel?: string;
+  enabled: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
 
 export type OllamaTestResponse =
   | { ok: true; models: string[] }
