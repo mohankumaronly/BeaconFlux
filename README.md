@@ -1,4 +1,4 @@
-# Local Ollama Chat Interface
+# Beacon Flux (Local Ollama Chat Interface)
 
 A persisted chat application using Ollama for local LLM inference, Express for the backend API, PostgreSQL for persistence, and React for the frontend. Works against local Ollama **or** a remote Ollama exposed through a Cloudflare Tunnel.
 
