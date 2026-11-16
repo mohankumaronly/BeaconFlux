@@ -4,6 +4,7 @@ export type OllamaChatMessage = {
   role: 'system' | 'user' | 'assistant' | 'tool';
   content: string;
   tool_calls?: any[]; // Added for agent loop
+  tool_call_id?: string;
 };
 
 export type OllamaStreamChunk =
