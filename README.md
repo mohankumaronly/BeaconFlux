@@ -8,7 +8,7 @@ Open your terminal and run these three commands. No `.env` files, no manual toke
 
 ```powershell
 git clone https://github.com/mohankumaronly/BeaconFlux.git
-cd Local-ollama-chat-interface/docker
+cd BeaconFlux/docker
 docker compose up -d
 
 # Show the startup banner (URL + API Token)
