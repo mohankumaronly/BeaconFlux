@@ -69,7 +69,7 @@ export function formatSearchContext(results: WebSearchResult[]): string {
   const lines = results.map((r, i) => {
     const date = r.publishedDate ? ` (${r.publishedDate})` : '';
     
-    // 👇 FIX: Only use r.thumbnail, which is already defined in the type
+    // Only use r.thumbnail, which is already defined in the type
     const imageStr = r.thumbnail ? `\nImage URL: ${r.thumbnail}` : '';
 
     return `[${i + 1}] ${r.title}${date}\n${r.snippet}${imageStr}\nSource: ${r.url}`;
@@ -82,4 +82,31 @@ export function formatSearchContext(results: WebSearchResult[]): string {
     'Do NOT provide bare links and do NOT tell the user to visit a website. Embed the image using the Markdown syntax above. If no Image URL is provided, do not attempt to create one.',
     ...lines,
   ].join('\n\n');
+}
+
+// 👇 NEW: Fetch full page content for a specific URL
+export async function fetchUrlContent(url: string): Promise<string> {
+  try {
+    const res = await fetch(url, { 
+      headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' },
+      signal: AbortSignal.timeout(8000) 
+    });
+    
+    if (!res.ok) return `Failed to fetch URL: HTTP ${res.status}`;
+    
+    const html = await res.text();
+
+    // Strip scripts, styles, and HTML tags to get clean text
+    const text = html
+      .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '') 
+      .replace(/<style\b[^<]*(?:(?!<\/style>)<[^<]*)*<\/style>/gi, '')   
+      .replace(/<[^>]+>/g, ' ')                                          
+      .replace(/\s+/g, ' ')                                              
+      .trim();
+
+    // Limit to ~16,000 chars to protect the model's context window
+    return text.slice(0, 16000); 
+  } catch (err) {
+    return `Failed to fetch URL: ${(err as Error).message}`;
+  }
 }

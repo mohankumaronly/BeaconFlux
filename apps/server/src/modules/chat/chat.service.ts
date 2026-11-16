@@ -1,7 +1,7 @@
 import type { ServerStreamEvent } from '@local-ollama/shared';
 import * as repo from './chat.repo.js';
 import { streamOllamaChat, type OllamaChatMessage } from '../ollama/ollama.client.js';
-import { webSearch, formatSearchContext } from '../search/search.service.js';
+import { webSearch, formatSearchContext, fetchUrlContent } from '../search/search.service.js';
 
 export type ChatStreamEvent = ServerStreamEvent;
 
@@ -43,26 +43,21 @@ export async function* streamChat(
 
   const systemPrompt: OllamaChatMessage = {
     role: 'system',
-    content: `You are a helpful search assistant. Today's date is {{CURRENT_DATE}}.
+    content: `You are a helpful search assistant. Today's date is ${today}.
 
-You have been provided with search results. You MUST follow these rules strictly:
+### GUIDELINES:
+1. **GREETINGS & GENERAL CHAT**: If the user says "Hello", "Hi", or asks a general programming/math question, answer them normally using your own knowledge.
+2. **FACTUAL QUERIES**: If the user asks about current events, news, live data, or specific people/companies, rely ONLY on the provided search results and full page content.
+3. **NO RESULTS HANDLING**: If you are asked a factual question but the search results are empty, say: "I searched the web but couldn't find current information on that."
+4. **CROSS-REFERENCING**: You will receive the full text of the top multiple search results. Cross-reference them to ensure accuracy. If they contradict each other, state the discrepancy.
 
-### 1. GROUNDING
-- Base your answer primarily on the provided search results.
-- Do NOT add facts, numbers, or statistics that are not present in the search results.
-- If the search results do not fully answer the question, say so explicitly.
+### CITATIONS (CRITICAL FOR FACTUAL ANSWERS)
+- You MUST cite search results directly after the sentence: "The sky is blue[1]."
+- Do NOT leave a space between the word and the bracket.
+- Do NOT include a separate "References" section at the end.
 
-### 2. CITATIONS (CRITICAL)
-- You MUST cite search results directly after the sentence they are used in.
-- Use the following format: "The sky is blue[1]."
-- Do NOT leave a space between the last word and the citation bracket.
-- Only cite the most relevant search results. Cite at most three per sentence.
-- Do NOT include a separate "References" or "Sources" section at the end.
-
-### 3. FORMATTING
-- If the user asks for images or wallpapers, and an "Image URL:" is present in the search results, you MUST render the image using Markdown: ![Description](Image_URL).
-- NEVER copy and paste entire web pages or README files. Summarize the information into 2-3 paragraphs.
-- If the user asks a follow-up question, use the chat history to understand the context.`
+### FORMATTING
+- If the user asks for images/wallpapers and an "Image URL:" is in the results, you MUST render it using Markdown: ![Description](Image_URL).`
   };
 
   const ollamaMessages: OllamaChatMessage[] = [
@@ -70,7 +65,7 @@ You have been provided with search results. You MUST follow these rules strictly
     ...history.map(m => ({ role: m.role as any, content: m.content }))
   ];
 
-  // Define the Web Search Tool
+  // Define Tools
   const webSearchTool = {
     type: 'function',
     function: {
@@ -89,8 +84,26 @@ You have been provided with search results. You MUST follow these rules strictly
     }
   };
 
+  const fetchUrlTool = {
+    type: 'function',
+    function: {
+      name: 'fetch_url',
+      description: 'Fetch the full text content of a specific URL. Use this when the user provides a link or asks you to read a specific webpage.',
+      parameters: {
+        type: 'object',
+        required: ['url'],
+        properties: {
+          url: {
+            type: 'string',
+            description: 'The exact URL to fetch (e.g., https://github.com/...)'
+          }
+        }
+      }
+    }
+  };
+
   let assistantText = '';
-  let currentTools = [webSearchTool];
+  let currentTools = [webSearchTool, fetchUrlTool];
 
   try {
     // --- AGENT LOOP ---
@@ -127,43 +140,89 @@ You have been provided with search results. You MUST follow these rules strictly
       ollamaMessages.push(currentAssistantMessage);
 
       const toolCall = currentAssistantMessage.tool_calls![0];
-      const searchQuery = toolCall.function.arguments?.query;
+      const toolName = toolCall.function.name;
+      const args = toolCall.function.arguments || {};
 
-      // 👇 GUARD: Block empty or undefined queries
-      if (!searchQuery || typeof searchQuery !== 'string' || searchQuery.trim() === '' || searchQuery === 'undefined') {
+      if (toolName === 'web_search') {
+        const searchQuery = args.query;
+
+        // GUARD: Block empty or undefined queries
+        if (!searchQuery || typeof searchQuery !== 'string' || searchQuery.trim() === '' || searchQuery === 'undefined') {
+          ollamaMessages.push({
+            role: 'tool',
+            content: 'Search failed: No valid query provided. Please answer the user using your existing knowledge.',
+          });
+          break;
+        }
+
+        yield { type: 'token', text: `\n\n*(Searching the web for: "${searchQuery}"...)*\n\n` };
+
+        const searchResults = await webSearch(searchQuery, 5, params.signal);
+        
+        let combinedPageContext = '';
+        
+        // 👇 NEW: Scrape the top 3 results concurrently
+        if (searchResults.length > 0) {
+          const topResults = searchResults.slice(0, 3);
+          yield { type: 'token', text: `\n*(Reading top ${topResults.length} web pages for accurate context...)*\n\n` };
+          
+          const pagePromises = topResults.map(async (result, index) => {
+            if (!result.url) return '';
+            const content = await fetchUrlContent(result.url);
+            if (content && !content.startsWith('Failed to fetch')) {
+              return `\n\n=== FULL CONTENT FROM RESULT [${index + 1}] (${result.url}) ===\n${content}`;
+            }
+            return '';
+          });
+
+          const pages = await Promise.all(pagePromises);
+          combinedPageContext = pages.join('');
+        }
+
+        const searchContext = formatSearchContext(searchResults);
+
+        if (searchResults.length > 0) {
+          yield {
+            type: 'sources',
+            sources: searchResults.map(r => ({
+              title: r.title,
+              url: r.url,
+              snippet: r.snippet,
+              publishedDate: r.publishedDate,
+              thumbnail: r.thumbnail || '',
+            }))
+          };
+        }
+
+        // Feed snippets + ALL full page content to the AI
         ollamaMessages.push({
           role: 'tool',
-          content: 'Search failed: No valid query provided. Please answer the user using your existing knowledge.',
+          content: (searchContext || 'No results found.') + combinedPageContext,
         });
-        break; // Break the loop and force the model to answer
+      } 
+      
+      else if (toolName === 'fetch_url') {
+        const targetUrl = args.url;
+
+        if (!targetUrl || typeof targetUrl !== 'string') {
+          ollamaMessages.push({
+            role: 'tool',
+            content: 'Fetch failed: No valid URL provided.',
+          });
+          break;
+        }
+
+        yield { type: 'token', text: `\n\n*(Reading webpage: "${targetUrl}"...)*\n\n` };
+
+        const pageContent = await fetchUrlContent(targetUrl);
+
+        ollamaMessages.push({
+          role: 'tool',
+          content: pageContent || 'Could not extract text from that page.',
+        });
       }
 
-      yield { type: 'token', text: `\n\n*(Searching the web for: "${searchQuery}"...)*\n\n` };
-
-      // Execute search
-      const searchResults = await webSearch(searchQuery, 5, params.signal);
-      const searchContext = formatSearchContext(searchResults);
-
-      // Yield full sources including thumbnails for the side panel
-      if (searchResults.length > 0) {
-        yield {
-          type: 'sources',
-          sources: searchResults.map(r => ({
-            title: r.title,
-            url: r.url,
-            snippet: r.snippet,
-            publishedDate: r.publishedDate,
-            thumbnail: r.thumbnail || '',
-          }))
-        };
-      }
-
-      ollamaMessages.push({
-        role: 'tool',
-        content: searchContext || 'No results found.',
-      });
-
-      // Disable tool for next pass so it writes the final answer
+      // Disable tools for next pass so it writes the final answer
       currentTools = [];
     }
 
