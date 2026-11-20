@@ -322,6 +322,11 @@ export function Sidebar({
   const grouped = groupChats(chats);
   const confirmChat = confirmId !== null ? chats.find((c) => c.id === confirmId) : null;
 
+  // Normalize the optional provider id to a concrete string so ModelPicker
+  // always receives a definite value ('' = Ollama local). This is the only
+  // change vs. the original file and it prevents undefined-vs-'' bugs.
+  const normalizedProviderId = currentProviderId ?? '';
+
   useEffect(() => {
     if (openMenuId === null) return;
     const handleClickOutside = () => setOpenMenuId(null);
@@ -381,7 +386,7 @@ export function Sidebar({
       <div className="mt-4 px-3">
         <ModelPicker
           providers={providers}
-          currentProviderId={currentProviderId}
+          currentProviderId={normalizedProviderId}
           currentModel={model}
           ollamaModels={models}
           onSelect={onModelChange}

@@ -1,0 +1,142 @@
+@import "tailwindcss";
+
+/* v4: use @custom-variant to override dark mode trigger method, changed from media query to .dark class */
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* Light theme variables (default) */
+:root {
+  --bg: #FAFAFB;
+  --surface: #FFFFFF;
+  --surface-2: #F4F5F7;
+  --border: #E2E5EA;
+  --border-strong: #CDD1D9;
+  --fg: #111827;
+  --muted: #4B5563;
+  --subtle: #6B7280;
+  --accent: #4F46E5;
+  --accent-fg: #FFFFFF;
+  --accent-soft: #EEF2FF;
+  color-scheme: light;
+}
+
+/* Dark theme variables */
+.dark {
+  --bg: #0B0F14;
+  --surface: #121821;
+  --surface-2: #1A212C;
+  --border: #212936;
+  --border-strong: #333D4D;
+  --fg: #E6EDF3;
+  --muted: #A3B0C0;
+  --subtle: #8B949E;
+  --accent: #818CF8;
+  --accent-fg: #0B0F14;
+  --accent-soft: #1E2042;
+  color-scheme: dark;
+}
+
+/* v4: use @theme inline to map CSS variables to Tailwind utility classes */
+@theme inline {
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-border: var(--border);
+  --color-border-strong: var(--border-strong);
+  --color-fg: var(--fg);
+  --color-muted: var(--muted);
+  --color-subtle: var(--subtle);
+  --color-accent: var(--accent);
+  --color-accent-fg: var(--accent-fg);
+  --color-accent-soft: var(--accent-soft);
+
+  --font-sans: 'Inter', ui-sans-serif, system-ui, sans-serif;
+  --font-mono: '"JetBrains Mono"', ui-monospace, monospace;
+
+  --radius-xl: 0.875rem;
+  --radius-2xl: 1.125rem;
+}
+
+/* Base styles */
+@layer base {
+  * {
+    border-color: var(--border);
+  }
+  html {
+    scroll-behavior: smooth;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+  body {
+    background-color: var(--bg);
+    color: var(--fg);
+    font-family: var(--font-sans);
+    font-feature-settings: 'cv11', 'ss01';
+    transition: background-color 200ms ease, color 200ms ease;
+  }
+  ::selection {
+    background-color: rgb(var(--accent) / 0.25);
+  }
+}
+
+/* Custom component classes (usable with @apply in v4) */
+@layer components {
+  .container-page {
+    @apply mx-auto w-full max-w-6xl px-5 sm:px-8;
+  }
+  .btn-primary {
+    @apply inline-flex items-center justify-center gap-2 rounded-xl bg-accent px-5 py-2.5
+           text-sm font-semibold text-accent-fg shadow-sm
+           transition-all duration-200 hover:-translate-y-0.5 hover:opacity-90
+           focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent;
+  }
+  .btn-secondary {
+    @apply inline-flex items-center justify-center gap-2 rounded-xl border border-border-strong
+           bg-surface px-5 py-2.5 text-sm font-semibold text-fg shadow-sm
+           transition-all duration-200 hover:-translate-y-0.5 hover:bg-surface-2
+           focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent;
+  }
+  .card {
+    @apply rounded-2xl border border-border bg-surface shadow-sm
+           transition-all duration-200;
+  }
+  .card-hover {
+    @apply hover:-translate-y-1 hover:border-border-strong hover:shadow-md;
+  }
+  .eyebrow {
+    @apply text-xs font-semibold uppercase tracking-[0.14em] text-accent;
+  }
+}
+
+/* Scrollbar */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--border-strong);
+  border-radius: 9999px;
+  border: 2px solid var(--bg);
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--subtle);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+@theme {
+  --animate-fade-up: fade-up 0.5s ease-out both;
+  @keyframes fade-up {
+    from { opacity: 0; transform: translateY(8px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+}
