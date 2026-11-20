@@ -4,6 +4,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createApp } from '../app.js';
 import { streamChat } from '../modules/chat/chat.service.js';
+import { touchChat } from '../modules/chat/chat.repo.js';
 import { db } from '../db/client.js';
 import { env } from '../config/env.js';
 import type { Provider, ProviderStreamChunk } from '../providers/base.provider.js';
@@ -230,3 +231,21 @@ test('T-REG-08: chat.service.ts agent loop caps at MAX_LOOPS = 3', async () => {
     globalThis.fetch = originalFetch;
   }
 });
+
+test('T-REG-09: touchChat preserves pinned and pinnedAt', async () => {
+  let capturedPayload: any = null;
+  (db as any).update = () => ({
+    set: (payload: any) => {
+      capturedPayload = payload;
+      return { where: async () => [] };
+    },
+  });
+
+  await touchChat(1);
+
+  assert.ok(capturedPayload);
+  assert.ok('updatedAt' in capturedPayload);
+  assert.strictEqual('pinned' in capturedPayload, false);
+  assert.strictEqual('pinnedAt' in capturedPayload, false);
+});
+
