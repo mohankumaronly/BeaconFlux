@@ -95,6 +95,8 @@ test('T-REG-02: Existing chat with provider_id = NULL loads and send message wor
     providerId: null,
     createdAt: new Date('2026-01-01'),
     updatedAt: new Date('2026-01-01'),
+    pinned: false,
+    pinnedAt: null,
   };
 
   const existingMessage: Message = {

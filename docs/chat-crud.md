@@ -99,3 +99,32 @@ Web:
 3. Shared types + web API client
 4. Sidebar UI
 5. Docs + README + full integration
+
+
+## Phase Status
+- Phase 1 — Schema + migration: ✅ complete
+- Phase 2 — Backend CRUD endpoints: ✅ complete
+- Phase 3 — Shared types + API client: ✅ complete
+- Phase 4 — Sidebar UI: ✅ complete
+- Phase 5 — Build fix + docs: ✅ complete (this phase)
+
+## Deviations from Original Spec
+1. **`chatRepo` namespace export (Phase 2):** chat.repo.ts now exports
+   `chatRepo` as a mutable object (mirroring `providerRepo` from
+   providers.repo.ts) so integration tests can stub repo methods without
+   violating ESM namespace immutability. All original named exports are
+   preserved; chat.service.ts still uses `import * as repo`.
+2. **`packages/shared` has no separate build step (Phase 3):**
+   `package.json` exports `./src/index.ts` directly; consumers bundle it.
+   No `npm run build -w packages/shared` is required or meaningful.
+3. **`UseChats` field names (Phase 4):** the hook returns
+   `chats, loading, refresh, prependChat, rename, pin, remove, download`
+   — these exact names are used in App.tsx and Sidebar.tsx.
+4. **`ConfirmDialog` uses inline render, not portal (Phase 4):**
+   SSR-safe by design; `renderToString` tests exercise the same code
+   path as the browser.
+5. **Test-mock completeness fix (Phase 5):** two pre-existing test files
+   (chat.providers.test.ts, regression.test.ts) constructed `Chat`
+   literals missing `pinned`/`pinnedAt`. This broke the Docker build
+   because `tsc -p tsconfig.json` includes src/__tests__/. Fixed by
+   adding the two fields — no test logic changed.

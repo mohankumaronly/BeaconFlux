@@ -77,6 +77,8 @@ test.before(() => {
                 providerId: val.providerId ?? null,
                 createdAt: new Date(),
                 updatedAt: new Date(),
+                pinned: false,
+                pinnedAt: null,
               };
               inMemoryChats.set(chat.id, chat);
               inMemoryMessages.set(chat.id, []);
