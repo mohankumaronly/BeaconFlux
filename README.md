@@ -357,6 +357,9 @@ To completely disable web search and remove the SearXNG container:
 | SSRF protection | `OLLAMA_ALLOWED_HOSTS` allowlist blocks private IPs, metadata services, and unlisted domains |
 | Path locking | Backend only issues requests to `/api/chat` and `/api/tags` on target Ollama |
 | Tunnel exposure | Nginx (8080) only — raw Express API (3000) and Ollama (11434) are not exposed externally |
+| Chat mutation routes | `requireAuth` inherited from app-level middleware; 401 without Bearer |
+| Export route | `Content-Disposition: attachment` + `Cache-Control: no-store` prevents browser caching |
+| Delete route | FK `ON DELETE CASCADE` guarantees message deletion — no orphaned messages |
 
 ---
 
@@ -460,6 +463,9 @@ docker run --rm `
 - **No rate limiting** — add `express-rate-limit` before exposing to public untrusted traffic.
 - **Chunk size warning** — Vite bundle exceeds 500 kB; code-splitting / dynamic imports planned for v2.
 - **Volume persistence** — Auto-generated token is stored in a Docker volume named `local-ollama-api-token`; if the volume is removed, clients must re-verify (re-paste or run Settings).
+- **Pinned ordering** — Server-sorted (`pinned DESC, updatedAt DESC`); no drag-to-reorder.
+- **Export serialization** — Exports the entire chat in memory (acceptable for v1 chat sizes).
+- **Kebab menu arrow-key navigation** — Deferred to v2 (Tab/Enter/Esc supported).
 
 ---
 
@@ -482,3 +488,6 @@ docker run --rm `
 - Auto-applied DB migrations on container boot sharing `drizzle.__drizzle_migrations` (Part 2)
 - Boot banner with URL + token and fingerprint security (Part 3)
 - First-run frontend modal with token verification against `/api/v1/auth/verify` (Part 4)
+- Chat rename, pin/unpin, export (Markdown + JSON), and delete with cascade (chat CRUD)
+- Sidebar kebab menu with inline rename, pinned section, and export downloads
+- ConfirmDialog modal for destructive actions (accessible, Esc-to-cancel)

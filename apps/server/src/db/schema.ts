@@ -25,12 +25,15 @@ export const providers = pgTable('providers', {
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 });
 
+/** chats — one row per conversation. pinned/pinnedAt drive sidebar pinning (phase 2+). */
 export const chats = pgTable('chats', {
   id: serial('id').primaryKey(),
   title: text('title').notNull().default('New chat'),
   providerId: uuid('provider_id').references(() => providers.id, { onDelete: 'set null' }),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  pinned: boolean('pinned').notNull().default(false),
+  pinnedAt: timestamp('pinned_at', { withTimezone: true }),
 });
 
 export const messages = pgTable(

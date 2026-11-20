@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { useConnection } from './hooks/useConnection';
 import { useChat } from './hooks/useChat';
 import { useTheme } from './hooks/useTheme';
+import { useChats } from './hooks/useChats';
 import { Sidebar } from './components/Sidebar';
 import { ChatWindow } from './components/ChatWindow';
 import { Composer } from './components/Composer';
@@ -13,11 +14,9 @@ import { ProviderBadge } from './components/ProviderBadge';
 import { useProviderSelection } from './hooks/useProviders';
 import { Settings, Check, AlertCircle, Search } from 'lucide-react';
 import {
-  listChats,
   hasApiToken,
   getStoredToken,
   verifyToken,
-  type ChatSummary,
 } from './lib/api';
 
 const DEFAULT_MODEL = 'llama3.2';
@@ -42,7 +41,6 @@ const App = () => {
   const { currentId: providerId, current: currentProvider, setCurrentId, providers } = useProviderSelection();
   const [selectedModel, setSelectedModel] = useState(DEFAULT_MODEL);
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const [chats, setChats] = useState<ChatSummary[]>([]);
   const [firstRunOpen, setFirstRunOpen] = useState(() => !hasApiToken());
   const [showTokenBanner, setShowTokenBanner] = useState(false);
   const [toast, setToast] = useState<ToastState | null>(null);
@@ -61,25 +59,47 @@ const App = () => {
       ? fallbackModel
       : selectedModel;
 
-  const handleChatCreated = useCallback((chat: { id: number; title: string }) => {
-    const now = new Date().toISOString();
-    setChats((prev) => [
-      { id: chat.id, title: chat.title, createdAt: now, updatedAt: now },
-      ...prev,
-    ]);
-  }, []);
-
   const {
     messages, chatId, isStreaming, progress, error, send, stop, clear, loadChat, currentSources
-  } = useChat({ model, ollamaUrl: baseUrl, providerId, onChatCreated: handleChatCreated });
+  } = useChat({
+    model,
+    ollamaUrl: baseUrl,
+    providerId,
+    onChatCreated: (chat) => handleChatCreated(chat),
+  });
+
+  const handleToast = useCallback(
+    (message: string, type?: 'info' | 'success' | 'warn' | 'error') => {
+      setToast({ message, type });
+    },
+    [],
+  );
+
+  const { chats, prependChat, rename, pin, remove, download, refresh } = useChats({
+    isStreaming,
+    onToast: handleToast,
+  });
+
+  const handleChatCreated = useCallback(
+    (chat: { id: number; title: string }) => {
+      const now = new Date().toISOString();
+      prependChat({
+        id: chat.id,
+        title: chat.title,
+        createdAt: now,
+        updatedAt: now,
+        pinned: false,
+        pinnedAt: null,
+      });
+    },
+    [prependChat],
+  );
 
   const [showSources, setShowSources] = useState(true);
 
   useEffect(() => {
     if (hasApiToken()) {
-      listChats()
-        .then(setChats)
-        .catch((e) => console.error('Failed to load chats', e));
+      void refresh();
     }
   }, []);
 
@@ -110,9 +130,7 @@ const App = () => {
       message: "Token saved. You're ready to chat.",
       type: 'success',
     });
-    listChats()
-      .then(setChats)
-      .catch((e) => console.error('Failed to load chats', e));
+    void refresh();
   };
 
   const handleFirstRunCancel = () => {
@@ -150,6 +168,15 @@ const App = () => {
         chats={chats}
         activeChatId={chatId}
         onSelectChat={handleSelectChat}
+        onRename={rename}
+        onPin={pin}
+        onDeleteChat={(id) => {
+          const wasActive = chatId === id;
+          remove(id).then(() => {
+            if (wasActive) clear();
+          });
+        }}
+        onExportChat={(id, fmt) => download(id, fmt)}
       />
 
       <main className="flex min-w-0 flex-1 flex-col h-full overflow-hidden">

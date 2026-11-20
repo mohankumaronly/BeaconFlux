@@ -1,15 +1,25 @@
+// Single responsibility: Sidebar navigation showing model picker, chat history grouped by date/pinned, and CRUD actions.
+
+import { useState, useEffect } from 'react';
 import {
   MessageSquarePlus,
   Sparkles,
   Settings,
   RefreshCw,
   MessageSquare,
+  Pin,
+  PinOff,
+  MoreVertical,
+  Pencil,
+  Trash2,
+  Download,
 } from 'lucide-react';
 import type { OllamaModel } from '../types';
 import type { ConnectionStatus } from '../hooks/useConnection';
 import type { ChatSummary } from '../lib/api';
 import type { ProviderPublic } from '../types/providers';
 import { ModelPicker } from './ModelPicker';
+import { ConfirmDialog } from './ConfirmDialog';
 
 function StatusDot({ status }: { status: ConnectionStatus }) {
   const color =
@@ -28,7 +38,9 @@ function StatusDot({ status }: { status: ConnectionStatus }) {
   );
 }
 
-// Group chats by relative date (Today / Yesterday / Previous 7 Days / Older)
+/**
+ * Group chats into pinned list and date-bucketed groups (Today / Yesterday / Previous 7 Days / Older).
+ */
 function groupChats(chats: ChatSummary[]) {
   const now = new Date();
   const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
@@ -42,7 +54,13 @@ function groupChats(chats: ChatSummary[]) {
     Older: [],
   };
 
+  const pinned: ChatSummary[] = [];
+
   for (const c of chats) {
+    if (c.pinned) {
+      pinned.push(c);
+      continue;
+    }
     const t = c.updatedAt ? new Date(c.updatedAt).getTime() : startOfToday;
     if (t >= startOfToday) groups.Today.push(c);
     else if (t >= startOfYesterday) groups.Yesterday.push(c);
@@ -50,7 +68,229 @@ function groupChats(chats: ChatSummary[]) {
     else groups.Older.push(c);
   }
 
-  return Object.entries(groups).filter(([, list]) => list.length > 0);
+  return {
+    pinned,
+    groups: Object.entries(groups).filter(([, list]) => list.length > 0),
+  };
+}
+
+interface ChatRowProps {
+  chat: ChatSummary;
+  active: boolean;
+  onSelectChat: (id: number) => void;
+  hasActions: boolean;
+  isMenuOpen: boolean;
+  isRenaming: boolean;
+  onToggleMenu: () => void;
+  onCloseMenu: () => void;
+  onStartRename: () => void;
+  onStopRename: () => void;
+  onRename?: (id: number, title: string) => void;
+  onPin?: (id: number, pinned: boolean) => void;
+  canDelete: boolean;
+  onConfirmDelete: () => void;
+  onExportChat?: (id: number, format: 'md' | 'json') => void;
+}
+
+/**
+ * Single chat row in sidebar with kebab actions menu and inline rename input.
+ */
+function ChatRow({
+  chat,
+  active,
+  onSelectChat,
+  hasActions,
+  isMenuOpen,
+  isRenaming,
+  onToggleMenu,
+  onCloseMenu,
+  onStartRename,
+  onStopRename,
+  onRename,
+  onPin,
+  canDelete,
+  onConfirmDelete,
+  onExportChat,
+}: ChatRowProps) {
+  return (
+    <li className="relative group">
+      <div
+        className={[
+          'group flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left text-sm transition-colors',
+          active
+            ? 'bg-gray-200 font-medium text-gray-900 dark:bg-gray-800 dark:text-gray-100'
+            : 'text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-800/70',
+        ].join(' ')}
+      >
+        {chat.pinned ? (
+          <Pin size={13} className="shrink-0 fill-current opacity-60" />
+        ) : (
+          <MessageSquare
+            size={15}
+            className="shrink-0 opacity-60 group-hover:opacity-100"
+          />
+        )}
+
+        {isRenaming ? (
+          <input
+            type="text"
+            autoFocus
+            maxLength={120}
+            defaultValue={chat.title}
+            aria-label="Rename chat"
+            className="w-full rounded bg-white px-1.5 py-0.5 text-xs text-gray-900 outline-none ring-1 ring-blue-500 dark:bg-gray-800 dark:text-gray-100"
+            onClick={(e) => e.stopPropagation()}
+            onKeyDown={(e) => {
+              e.stopPropagation();
+              if (e.key === 'Enter') {
+                const val = e.currentTarget.value.trim();
+                if (val && val !== chat.title) {
+                  onRename?.(chat.id, val);
+                }
+                onStopRename();
+              } else if (e.key === 'Escape') {
+                onStopRename();
+              }
+            }}
+            onBlur={(e) => {
+              const val = e.currentTarget.value.trim();
+              if (val && val !== chat.title) {
+                onRename?.(chat.id, val);
+              }
+              onStopRename();
+            }}
+          />
+        ) : (
+          <button
+            type="button"
+            onClick={() => onSelectChat(chat.id)}
+            className="min-w-0 flex-1 truncate text-left focus:outline-none"
+            title={chat.title}
+          >
+            <span className="truncate">{chat.title || 'Untitled chat'}</span>
+          </button>
+        )}
+
+        {hasActions && !isRenaming && (
+          <button
+            type="button"
+            aria-label="Chat actions"
+            onClick={(e) => {
+              e.stopPropagation();
+              onToggleMenu();
+            }}
+            className={[
+              'rounded p-1 text-gray-400 hover:bg-gray-200 hover:text-gray-700 dark:hover:bg-gray-700 dark:hover:text-gray-200 transition-opacity',
+              isMenuOpen
+                ? 'opacity-100'
+                : 'opacity-0 group-hover:opacity-100 group-focus-within:opacity-100',
+            ].join(' ')}
+          >
+            <MoreVertical size={14} />
+          </button>
+        )}
+      </div>
+
+      {/* Popover action menu */}
+      {isMenuOpen && (
+        <div
+          role="menu"
+          className="absolute right-0 top-full mt-1 z-20 w-44 rounded-xl border border-gray-200 bg-white py-1 shadow-lg dark:border-gray-800 dark:bg-gray-900"
+          onClick={(e) => e.stopPropagation()}
+        >
+          {onRename && (
+            <button
+              type="button"
+              role="menuitem"
+              onClick={() => {
+                onCloseMenu();
+                onStartRename();
+              }}
+              className="flex w-full items-center gap-2 px-3 py-1.5 text-xs text-gray-700 hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-gray-800"
+            >
+              <Pencil size={13} /> Rename
+            </button>
+          )}
+          {onPin && (
+            <button
+              type="button"
+              role="menuitem"
+              onClick={() => {
+                onCloseMenu();
+                onPin(chat.id, !chat.pinned);
+              }}
+              className="flex w-full items-center gap-2 px-3 py-1.5 text-xs text-gray-700 hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-gray-800"
+            >
+              {chat.pinned ? <PinOff size={13} /> : <Pin size={13} />}
+              {chat.pinned ? 'Unpin' : 'Pin'}
+            </button>
+          )}
+          {onExportChat && (
+            <>
+              <button
+                type="button"
+                role="menuitem"
+                onClick={() => {
+                  onCloseMenu();
+                  onExportChat(chat.id, 'md');
+                }}
+                className="flex w-full items-center gap-2 px-3 py-1.5 text-xs text-gray-700 hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-gray-800"
+              >
+                <Download size={13} /> Export Markdown
+              </button>
+              <button
+                type="button"
+                role="menuitem"
+                onClick={() => {
+                  onCloseMenu();
+                  onExportChat(chat.id, 'json');
+                }}
+                className="flex w-full items-center gap-2 px-3 py-1.5 text-xs text-gray-700 hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-gray-800"
+              >
+                <Download size={13} /> Export JSON
+              </button>
+            </>
+          )}
+          {canDelete && (
+            <button
+              type="button"
+              role="menuitem"
+              onClick={() => {
+                onCloseMenu();
+                onConfirmDelete();
+              }}
+              className="flex w-full items-center gap-2 px-3 py-1.5 text-xs text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-950/40"
+            >
+              <Trash2 size={13} /> Delete
+            </button>
+          )}
+        </div>
+      )}
+    </li>
+  );
+}
+
+export interface SidebarProps {
+  models: OllamaModel[];
+  model: string;
+  onModelChange: (providerId: string, model: string) => void;
+  onNewChat: () => void;
+  baseUrl: string;
+  status: ConnectionStatus;
+  loadingModels: boolean;
+  onOpenSettings: () => void;
+  onRetry: () => void;
+  chats: ChatSummary[];
+  activeChatId?: number;
+  onSelectChat: (id: number) => void;
+  providers?: ProviderPublic[];
+  currentProviderId?: string;
+  onRename?: (id: number, title: string) => void;
+  onPin?: (id: number, pinned: boolean) => void;
+  onDeleteChat?: (id: number) => void;
+  onExportChat?: (id: number, format: 'md' | 'json') => void;
+  /** Test-only: initial inline rename state. Defaults to undefined. */
+  initialRenamingId?: number;
 }
 
 export function Sidebar({
@@ -68,23 +308,37 @@ export function Sidebar({
   onSelectChat,
   providers = [],
   currentProviderId,
-}: {
-  models: OllamaModel[];
-  model: string;
-  onModelChange: (providerId: string, model: string) => void;
-  onNewChat: () => void;
-  baseUrl: string;
-  status: ConnectionStatus;
-  loadingModels: boolean;
-  onOpenSettings: () => void;
-  onRetry: () => void;
-  chats: ChatSummary[];
-  activeChatId?: number;
-  onSelectChat: (id: number) => void;
-  providers?: ProviderPublic[];
-  currentProviderId?: string;
-}) {
+  onRename,
+  onPin,
+  onDeleteChat,
+  onExportChat,
+  initialRenamingId,
+}: SidebarProps) {
+  const [openMenuId, setOpenMenuId] = useState<number | null>(null);
+  const [renamingId, setRenamingId] = useState<number | null>(initialRenamingId ?? null);
+  const [confirmId, setConfirmId] = useState<number | null>(null);
+
+  const hasActions = Boolean(onRename || onPin || onDeleteChat || onExportChat);
   const grouped = groupChats(chats);
+  const confirmChat = confirmId !== null ? chats.find((c) => c.id === confirmId) : null;
+
+  useEffect(() => {
+    if (openMenuId === null) return;
+    const handleClickOutside = () => setOpenMenuId(null);
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setOpenMenuId(null);
+    };
+    if (typeof document !== 'undefined') {
+      document.addEventListener('click', handleClickOutside);
+      document.addEventListener('keydown', handleKeyDown);
+    }
+    return () => {
+      if (typeof document !== 'undefined') {
+        document.removeEventListener('click', handleClickOutside);
+        document.removeEventListener('keydown', handleKeyDown);
+      }
+    };
+  }, [openMenuId]);
 
   return (
     <aside className="hidden w-72 shrink-0 flex-col border-r border-gray-200 bg-gray-50 dark:border-gray-800 dark:bg-gray-950 md:flex">
@@ -148,36 +402,64 @@ export function Sidebar({
             </div>
           )}
 
-          {grouped.map(([label, list]) => (
+          {/* Pinned section */}
+          {grouped.pinned.length > 0 && (
+            <div className="mb-2">
+              <h3 className="px-2 pb-1 pt-2 text-[11px] font-medium uppercase tracking-wide text-gray-500 dark:text-gray-400">
+                Pinned
+              </h3>
+              <ul className="space-y-0.5">
+                {grouped.pinned.map((c) => (
+                  <ChatRow
+                    key={c.id}
+                    chat={c}
+                    active={c.id === activeChatId}
+                    onSelectChat={onSelectChat}
+                    hasActions={hasActions}
+                    isMenuOpen={openMenuId === c.id}
+                    isRenaming={renamingId === c.id}
+                    onToggleMenu={() => setOpenMenuId(openMenuId === c.id ? null : c.id)}
+                    onCloseMenu={() => setOpenMenuId(null)}
+                    onStartRename={() => setRenamingId(c.id)}
+                    onStopRename={() => setRenamingId(null)}
+                    onRename={onRename}
+                    onPin={onPin}
+                    canDelete={Boolean(onDeleteChat)}
+                    onConfirmDelete={() => setConfirmId(c.id)}
+                    onExportChat={onExportChat}
+                  />
+                ))}
+              </ul>
+            </div>
+          )}
+
+          {/* Date groups */}
+          {grouped.groups.map(([label, list]) => (
             <div key={label} className="mb-2">
               <h3 className="px-2 pb-1 pt-2 text-[11px] font-medium uppercase tracking-wide text-gray-500 dark:text-gray-400">
                 {label}
               </h3>
               <ul className="space-y-0.5">
-                {list.map((c) => {
-                  const active = c.id === activeChatId;
-                  return (
-                    <li key={c.id}>
-                      <button
-                        type="button"
-                        onClick={() => onSelectChat(c.id)}
-                        className={[
-                          'group flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left text-sm transition-colors',
-                          active
-                            ? 'bg-gray-200 font-medium text-gray-900 dark:bg-gray-800 dark:text-gray-100'
-                            : 'text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-800/70',
-                        ].join(' ')}
-                        title={c.title}
-                      >
-                        <MessageSquare
-                          size={15}
-                          className="shrink-0 opacity-60 group-hover:opacity-100"
-                        />
-                        <span className="truncate">{c.title || 'Untitled chat'}</span>
-                      </button>
-                    </li>
-                  );
-                })}
+                {list.map((c) => (
+                  <ChatRow
+                    key={c.id}
+                    chat={c}
+                    active={c.id === activeChatId}
+                    onSelectChat={onSelectChat}
+                    hasActions={hasActions}
+                    isMenuOpen={openMenuId === c.id}
+                    isRenaming={renamingId === c.id}
+                    onToggleMenu={() => setOpenMenuId(openMenuId === c.id ? null : c.id)}
+                    onCloseMenu={() => setOpenMenuId(null)}
+                    onStartRename={() => setRenamingId(c.id)}
+                    onStopRename={() => setRenamingId(null)}
+                    onRename={onRename}
+                    onPin={onPin}
+                    canDelete={Boolean(onDeleteChat)}
+                    onConfirmDelete={() => setConfirmId(c.id)}
+                    onExportChat={onExportChat}
+                  />
+                ))}
               </ul>
             </div>
           ))}
@@ -234,6 +516,23 @@ export function Sidebar({
           Chats saved to your local Postgres database.
         </p>
       </div>
+
+      {/* Delete confirmation dialog */}
+      {confirmChat && (
+        <ConfirmDialog
+          open={true}
+          title="Delete chat?"
+          message={`"${confirmChat.title || 'Untitled chat'}" and its messages will be permanently removed.`}
+          danger={true}
+          onConfirm={() => {
+            if (confirmId !== null) {
+              onDeleteChat?.(confirmId);
+            }
+            setConfirmId(null);
+          }}
+          onCancel={() => setConfirmId(null)}
+        />
+      )}
     </aside>
   );
 }
