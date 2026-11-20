@@ -1,6 +1,6 @@
 // Single responsibility: Manage chat list state, sorting, and CRUD actions (rename, pin, delete, export) with optimistic updates.
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useRef } from 'react';
 import type { ChatSummary, ExportFormat } from '../lib/api';
 import { listChats, renameChat, deleteChat, pinChat, exportChat } from '../lib/api';
 
@@ -52,7 +52,15 @@ export function shouldBlockMutation(isStreaming: boolean): boolean {
 export function useChats(opts: UseChatsOptions): UseChatsResult {
   const [chats, setChats] = useState<ChatSummary[]>([]);
   const [loading, setLoading] = useState(false);
-  const { isStreaming, onToast } = opts;
+
+  const onToastRef = useRef(opts.onToast);
+  onToastRef.current = opts.onToast;
+
+  const isStreamingRef = useRef(opts.isStreaming);
+  isStreamingRef.current = opts.isStreaming;
+
+  const chatsRef = useRef(chats);
+  chatsRef.current = chats;
 
   const refresh = useCallback(async () => {
     setLoading(true);
@@ -60,11 +68,11 @@ export function useChats(opts: UseChatsOptions): UseChatsResult {
       const rows = await listChats();
       setChats(sortChats(rows));
     } catch {
-      onToast('Failed to load chats', 'error');
+      onToastRef.current('Failed to load chats', 'error');
     } finally {
       setLoading(false);
     }
-  }, [onToast]);
+  }, []);
 
   const prependChat = useCallback((chat: ChatSummary) => {
     setChats((prev) => sortChats([chat, ...prev]));
@@ -72,14 +80,14 @@ export function useChats(opts: UseChatsOptions): UseChatsResult {
 
   const rename = useCallback(
     async (id: number, title: string) => {
-      if (shouldBlockMutation(isStreaming)) {
-        onToast('Wait for the response to finish', 'warn');
+      if (shouldBlockMutation(isStreamingRef.current)) {
+        onToastRef.current('Wait for the response to finish', 'warn');
         return;
       }
       const trimmed = title.trim();
       if (!trimmed) return;
 
-      const prev = chats;
+      const prev = chatsRef.current;
       setChats((current) =>
         sortChats(current.map((c) => (c.id === id ? { ...c, title: trimmed } : c))),
       );
@@ -88,20 +96,20 @@ export function useChats(opts: UseChatsOptions): UseChatsResult {
         await renameChat(id, trimmed);
       } catch {
         setChats(prev);
-        onToast('Rename failed', 'error');
+        onToastRef.current('Rename failed', 'error');
       }
     },
-    [chats, isStreaming, onToast],
+    [],
   );
 
   const pin = useCallback(
     async (id: number, pinned: boolean) => {
-      if (shouldBlockMutation(isStreaming)) {
-        onToast('Wait for the response to finish', 'warn');
+      if (shouldBlockMutation(isStreamingRef.current)) {
+        onToastRef.current('Wait for the response to finish', 'warn');
         return;
       }
 
-      const prev = chats;
+      const prev = chatsRef.current;
       setChats((current) =>
         sortChats(
           current.map((c) =>
@@ -116,16 +124,16 @@ export function useChats(opts: UseChatsOptions): UseChatsResult {
         await pinChat(id, pinned);
       } catch {
         setChats(prev);
-        onToast(pinned ? 'Pin failed' : 'Unpin failed', 'error');
+        onToastRef.current(pinned ? 'Pin failed' : 'Unpin failed', 'error');
       }
     },
-    [chats, isStreaming, onToast],
+    [],
   );
 
   const remove = useCallback(
     async (id: number) => {
-      if (shouldBlockMutation(isStreaming)) {
-        onToast('Wait for the response to finish', 'warn');
+      if (shouldBlockMutation(isStreamingRef.current)) {
+        onToastRef.current('Wait for the response to finish', 'warn');
         return;
       }
 
@@ -133,10 +141,10 @@ export function useChats(opts: UseChatsOptions): UseChatsResult {
         await deleteChat(id);
         await refresh();
       } catch {
-        onToast('Delete failed', 'error');
+        onToastRef.current('Delete failed', 'error');
       }
     },
-    [isStreaming, onToast, refresh],
+    [refresh],
   );
 
   const download = useCallback(
@@ -154,10 +162,10 @@ export function useChats(opts: UseChatsOptions): UseChatsResult {
           URL.revokeObjectURL(url);
         }
       } catch {
-        onToast('Export failed', 'error');
+        onToastRef.current('Export failed', 'error');
       }
     },
-    [onToast],
+    [],
   );
 
   return {

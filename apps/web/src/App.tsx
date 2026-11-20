@@ -68,9 +68,16 @@ const App = () => {
     onChatCreated: (chat) => handleChatCreated(chat),
   });
 
+  const handleToast = useCallback(
+    (message: string, type?: 'info' | 'success' | 'warn' | 'error') => {
+      setToast({ message, type });
+    },
+    [],
+  );
+
   const { chats, prependChat, rename, pin, remove, download, refresh } = useChats({
     isStreaming,
-    onToast: (msg, type) => setToast({ message: msg, type }),
+    onToast: handleToast,
   });
 
   const handleChatCreated = useCallback(
@@ -94,7 +101,7 @@ const App = () => {
     if (hasApiToken()) {
       void refresh();
     }
-  }, [refresh]);
+  }, []);
 
   useEffect(() => {
     const stored = getStoredToken();
