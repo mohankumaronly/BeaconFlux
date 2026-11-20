@@ -12,7 +12,8 @@ const ChatBody = z.object({
   model: z.string().min(1).default('llama3.2'),
   // Optional: client-supplied Ollama target. Omit to use env.OLLAMA_URL.
   ollamaUrl: z.string().url().optional(),
-  providerId: z.string().uuid().optional(),
+  // Allow both a valid UUID and an empty string (which means local Ollama)
+  providerId: z.union([z.string().uuid(), z.literal('')]).optional(),
 });
 
 const RenameBody = z.object({
@@ -34,7 +35,9 @@ export async function postChat(req: Request, res: Response): Promise<void> {
 
   // Resolve target: providerId -> client ollamaUrl override -> env default
   let provider;
-  if (providerId) {
+  
+  // Only attempt DB lookup if providerId is a non-empty string
+  if (providerId && providerId !== '') {
     provider = await getProviderById(providerId);
     if (!provider) {
       res.status(404).json({ error: 'Provider not found' });
@@ -50,6 +53,7 @@ export async function postChat(req: Request, res: Response): Promise<void> {
     }
     provider = makeOllamaProvider(ollamaUrl.replace(/\/+$/, ''));
   } else {
+    // Fallback to local Ollama env URL
     provider = makeOllamaProvider(env.OLLAMA_URL);
   }
 
@@ -240,4 +244,3 @@ export async function exportChatHandler(req: Request, res: Response): Promise<vo
     res.send(JSON.stringify({ chat: data.chat, messages: data.messages }, null, 2));
   }
 }
-
