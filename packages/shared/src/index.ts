@@ -5,6 +5,10 @@ export type ChatSummary = {
   title: string;
   createdAt: string;
   updatedAt: string;
+  /** NEW — true if the chat is pinned to the top of the sidebar. */
+  pinned: boolean;
+  /** NEW — ISO timestamp when pinned, or null when unpinned. */
+  pinnedAt: string | null;
 };
 
 export type ChatMessage = {
@@ -44,6 +48,15 @@ export type ChatRequestBody = {
 };
 
 export type ChatRequest = ChatRequestBody;
+
+/** Body payload for renaming a chat title. */
+export type RenameChatBody = { title: string };
+
+/** Body payload for pinning or unpinning a chat. */
+export type PinChatBody = { pinned: boolean };
+
+/** Supported formats for exporting chat history. */
+export type ExportFormat = 'md' | 'json';
 
 export interface ProviderPreset {
   label: string;

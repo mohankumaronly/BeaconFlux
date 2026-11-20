@@ -6,10 +6,23 @@ import type {
   MessagesResponse,
   HealthResponse,
   OllamaTestResponse,
+  RenameChatBody,
+  PinChatBody,
+  ExportFormat,
 } from '@local-ollama/shared';
 
 // Re-export so existing internal consumers don't need to change their imports.
-export type { ServerStreamEvent, ChatSummary, ChatMessage, MessagesResponse, HealthResponse, OllamaTestResponse };
+export type {
+  ServerStreamEvent,
+  ChatSummary,
+  ChatMessage,
+  MessagesResponse,
+  HealthResponse,
+  OllamaTestResponse,
+  RenameChatBody,
+  PinChatBody,
+  ExportFormat,
+};
 
 // ServerMessage was the old name for ChatMessage — alias for backwards compat.
 export type ServerMessage = ChatMessage;
@@ -121,6 +134,62 @@ export async function getMessages(chatId: number): Promise<MessagesResponse> {
   const res = await fetch(`/api/v1/chats/${chatId}/messages`, { headers: authHeaders() });
   if (!res.ok) throw new Error(`getMessages failed: ${res.status}`);
   return res.json();
+}
+
+/**
+ * Rename a chat.
+ * PATCH /api/v1/chats/:id  → 200 ChatSummary
+ */
+export async function renameChat(id: number, title: string): Promise<ChatSummary> {
+  const res = await fetch(`/api/v1/chats/${id}`, {
+    method: 'PATCH',
+    headers: authHeaders({ 'Content-Type': 'application/json' }),
+    body: JSON.stringify({ title } satisfies RenameChatBody),
+  });
+  if (!res.ok) throw new Error(`renameChat failed: ${res.status}`);
+  return res.json();
+}
+
+/**
+ * Delete a chat and cascade messages.
+ * DELETE /api/v1/chats/:id  → 204
+ */
+export async function deleteChat(id: number): Promise<void> {
+  const res = await fetch(`/api/v1/chats/${id}`, {
+    method: 'DELETE',
+    headers: authHeaders(),
+  });
+  if (!res.ok) throw new Error(`deleteChat failed: ${res.status}`);
+}
+
+/**
+ * Pin or unpin a chat.
+ * PATCH /api/v1/chats/:id/pin  → 200 ChatSummary
+ */
+export async function pinChat(id: number, pinned: boolean): Promise<ChatSummary> {
+  const res = await fetch(`/api/v1/chats/${id}/pin`, {
+    method: 'PATCH',
+    headers: authHeaders({ 'Content-Type': 'application/json' }),
+    body: JSON.stringify({ pinned } satisfies PinChatBody),
+  });
+  if (!res.ok) throw new Error(`pinChat failed: ${res.status}`);
+  return res.json();
+}
+
+/**
+ * Download a chat transcript as a Blob.
+ * GET /api/v1/chats/:id/export?format=md|json
+ * The caller is responsible for triggering the browser download.
+ */
+export async function exportChat(
+  id: number,
+  format: ExportFormat = 'md',
+): Promise<Blob> {
+  const res = await fetch(`/api/v1/chats/${id}/export?format=${format}`, {
+    headers: authHeaders(),
+  });
+  if (!res.ok) throw new Error(`exportChat failed: ${res.status}`);
+  return res.blob();
 }
 
 /**
