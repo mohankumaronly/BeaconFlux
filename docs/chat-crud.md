@@ -128,3 +128,8 @@ Web:
    literals missing `pinned`/`pinnedAt`. This broke the Docker build
    because `tsc -p tsconfig.json` includes src/__tests__/. Fixed by
    adding the two fields — no test logic changed.
+6. **Infinite render loop fix (Phase 4 hotfix):** `useChats` callbacks were
+   originally unstable due to inline `onToast` props in App.tsx, causing an
+   infinite network request loop. Fixed by stabilizing `onToast` with
+   `useCallback` and bridging state/props via `useRef` in `useChats` so all
+   actions maintain `[]` dependency arrays.
