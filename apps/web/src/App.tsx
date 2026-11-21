@@ -1,3 +1,9 @@
+/**
+ * @file App.tsx
+ * @description Main application shell for Beacon Flux Chat. Coordinates connection status,
+ * provider and model selection, conversation history, chat streaming, and settings.
+ */
+
 import { useCallback, useEffect, useState } from 'react';
 import { useConnection } from './hooks/useConnection';
 import { useChat } from './hooks/useChat';
@@ -26,6 +32,12 @@ interface ToastState {
   type?: 'info' | 'success' | 'warn' | 'error';
 }
 
+/**
+ * Top-level application component for Beacon Flux.
+ * Manages UI layout, chat lifecycle, active provider synchronization, and settings state.
+ *
+ * @returns React application element.
+ */
 const App = () => {
   const { theme, toggle } = useTheme();
   const {
@@ -38,24 +50,38 @@ const App = () => {
     reset,
   } = useConnection();
 
-  const { currentId: providerId, current: currentProvider, setCurrentId, providers } = useProviderSelection();
+  const {
+    currentId: providerId,
+    current: currentProvider,
+    setCurrentId,
+    providers,
+    loading: providersLoading,
+  } = useProviderSelection();
+
   const [selectedModel, setSelectedModel] = useState(DEFAULT_MODEL);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [firstRunOpen, setFirstRunOpen] = useState(() => !hasApiToken());
   const [showTokenBanner, setShowTokenBanner] = useState(false);
   const [toast, setToast] = useState<ToastState | null>(null);
 
+  // Step 3: Guard against stale IDs (Defensive Fix).
+  // If providers have finished loading and currentProviderId is set to an ID that does not exist in
+  // the providers array, reset currentProviderId to undefined to prevent sending a stale ID to the backend.
   useEffect(() => {
-    if (currentProvider?.defaultModel) setSelectedModel(currentProvider.defaultModel);
-  }, [currentProvider?.id, currentProvider?.defaultModel]);
+    if (!providersLoading && providerId && !providers.some((p) => p.id === providerId)) {
+      setCurrentId(undefined);
+    }
+  }, [providersLoading, providerId, providers, setCurrentId]);
 
   const fallbackModel = (() => {
     if (models.length === 0) return selectedModel;
     const preferred = models.find((m) => /^llama/i.test(m.name));
     return (preferred ?? models[0]).name;
   })();
+
+  // Fallback to Ollama model only when no custom provider is active.
   const model =
-    models.length > 0 && !models.some((m) => m.name === selectedModel)
+    !providerId && models.length > 0 && !models.some((m) => m.name === selectedModel)
       ? fallbackModel
       : selectedModel;
 
@@ -64,7 +90,8 @@ const App = () => {
   } = useChat({
     model,
     ollamaUrl: baseUrl,
-    providerId,
+    // Step 2: Ensure providerId is undefined if empty string, so it gets omitted from the API request.
+    providerId: providerId || undefined,
     onChatCreated: (chat) => handleChatCreated(chat),
   });
 
@@ -154,8 +181,10 @@ const App = () => {
         models={models}
         model={model}
         onModelChange={(pId, m) => {
+          // Architectural decision: Convert empty provider string to undefined
+          // so local Ollama chat requests do not send an empty providerId payload.
           setCurrentId(pId || undefined);
-          setSelectedModel(m);
+          setSelectedModel(m || DEFAULT_MODEL);
         }}
         providers={providers}
         currentProviderId={providerId}
